@@ -1,13 +1,15 @@
-# Paths are anchored to the root (leading /) so they never match source
-# packages such as src/main/kotlin/.../adapter/out/.
+# Sorties de build non ancrées : chaque module a les siennes
+# (book-store/build/, book-store-ti/build/).
+# Les chemins ancrés (/out/, /bin/) le restent pour ne pas attraper
+# un package de source portant le même nom.
 
 ### Gradle ###
-/.gradle/
-/build/
+.gradle/
+build/
 !gradle/wrapper/gradle-wrapper.jar
 
 ### Kotlin ###
-/.kotlin/
+.kotlin/
 
 ### IntelliJ IDEA ###
 /.idea/

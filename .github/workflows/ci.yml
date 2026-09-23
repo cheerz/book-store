@@ -41,23 +41,23 @@ jobs:
 
       # Trois couches, de la moins chère à la plus chère.
       - name: Unit tests
-        run: ./gradlew test
+        run: ./gradlew :book-store:test
 
       - name: Build jar
-        run: ./gradlew bootJar
+        run: ./gradlew :book-store:bootJar
 
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: build/reports/tests
+          path: book-store/build/reports/tests
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
-          path: build/libs/app.jar
+          path: book-store/build/libs/app.jar
           retention-days: 1
 
   create-container:
@@ -73,7 +73,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: app-jar
-          path: build/libs
+          path: book-store/build/libs
 
       - name: Login to SCW registry
         uses: docker/login-action@v4

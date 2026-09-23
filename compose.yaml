@@ -1,0 +1,28 @@
+# Environnement cible des tests de book-store-ti.
+# Prérequis : ./gradlew :book-store:bootJar  (le Dockerfile copie le jar, il ne le construit pas)
+#
+#   docker compose up -d --build     monte l'appli
+#   docker compose logs -f app       les logs en cas d'échec
+#   docker compose down -v           démonte tout
+#
+# En CI, APP_IMAGE pointe sur l'image déjà construite par buildx :
+#   APP_IMAGE=app:candidate docker compose up -d
+
+services:
+  app:
+    image: ${APP_IMAGE:-book-store:candidate}
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      # Aligné sur ce que Scaleway injecte en production.
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+    # Même enveloppe mémoire que le conteneur serverless, pour voir les
+    # problèmes de heap ici plutôt qu'en prod.
+    mem_limit: 512m
+
+# Pas de healthcheck ici : l'image ne contient ni curl ni wget.
+# La disponibilité est vérifiée côté tests, en interrogeant /api/health —
+# ce qui marche aussi quand la suite vise staging.
