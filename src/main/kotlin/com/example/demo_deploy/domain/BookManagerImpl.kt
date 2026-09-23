@@ -10,4 +10,8 @@ class BookManagerImpl(private val bookRepository: BookRepository)
         return bookRepository.findAll()
     }
 
+    override fun createBook(book: Book): Book {
+        return bookRepository.create(book)
+    }
+
 }

@@ -1,40 +1,46 @@
-HELP.md
-.gradle
-build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+# Paths are anchored to the root (leading /) so they never match source
+# packages such as src/main/kotlin/.../adapter/out/.
 
-### STS ###
-.apt_generated
+### Gradle ###
+/.gradle/
+/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+### Kotlin ###
+/.kotlin/
+
+### IntelliJ IDEA ###
+/.idea/
+/out/
+*.iml
+*.iws
+*.ipr
+
+### VS Code ###
+/.vscode/
+
+### Eclipse / STS ###
+/bin/
+/.apt_generated/
+/.settings/
+/.sts4-cache/
 .classpath
 .factorypath
 .project
-.settings
 .springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
 
-### IntelliJ IDEA ###
-.idea
-*.iws
-*.iml
-*.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
+### OS ###
+.DS_Store
+Thumbs.db
 
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
+### Secrets & local config ###
+.env
+.env.*
+*.local.yaml
+*.local.yml
 
-### VS Code ###
-.vscode/
+### Logs ###
+*.log
 
-### Kotlin ###
-.kotlin
+### Spring Initializr ###
+/HELP.md

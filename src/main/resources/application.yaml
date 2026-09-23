@@ -6,3 +6,16 @@ server:
   port: 8080
   servlet:
     context-path: "/api"
+
+management:
+  endpoints:
+    web:
+      # Endpoints served at the context root instead of /actuator,
+      # so the health check is /api/health.
+      base-path: "/"
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
