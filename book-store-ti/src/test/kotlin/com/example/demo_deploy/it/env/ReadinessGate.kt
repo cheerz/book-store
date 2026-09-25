@@ -6,13 +6,6 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Instant
 
-/**
- * Attend que l'application réponde avant de lancer le moindre scénario.
- *
- * Côté tests plutôt que dans un healthcheck compose, pour deux raisons :
- * l'image ne contient ni curl ni wget, et cette attente doit aussi fonctionner
- * quand la cible est staging.
- */
 object ReadinessGate {
 
     private val http: HttpClient = HttpClient.newHttpClient()

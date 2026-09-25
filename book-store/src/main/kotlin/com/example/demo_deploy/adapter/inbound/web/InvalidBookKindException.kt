@@ -1,6 +1,4 @@
 package com.example.demo_deploy.adapter.inbound.web
 
-class InvalidBookKindException( val receivedType: String,) : RuntimeException(
-    "Type de livre invalide : '$receivedType'. " +
-    "Les valeurs autorisées sont : fantasy, sf ou thriller."
-)
+class InvalidBookKindException(val receivedKind: String) :
+    RuntimeException("Invalid book kind: '$receivedKind'")
