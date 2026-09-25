@@ -101,6 +101,7 @@ jobs:
           file: docker/Dockerfile
           load: true
           push: false
+          labels: ${{ steps.meta.outputs.labels }}
           tags: book-store:candidate
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -128,24 +129,25 @@ jobs:
         if: always()
         run: docker compose down -v
 
-      - name: Push image
-        id: build-and-push
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: docker/Dockerfile
-          provenance: false
-          push: true
-          labels: ${{ steps.meta.outputs.labels }}
-          tags: ${{ steps.meta.outputs.tags }}
-          cache-from: type=gha
+      # On pousse l'image testée, pas un rebuild : ce qui part en prod est
+      # exactement ce que les TI ont validé.
+      - name: Push tested image
+        id: push
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while read -r tag; do
+            docker tag book-store:candidate "$tag"
+            docker push "$tag"
+          done <<< "$TAGS"
+          echo "digest=$(docker inspect --format '{{index .RepoDigests 0}}' book-store:candidate)" >> "$GITHUB_OUTPUT"
 
       - name: Summary
         run: |
           {
             echo "### Image pushed"
             echo "- Tags: \`${{ steps.meta.outputs.tags }}\`"
-            echo "- Digest: \`${{ steps.build-and-push.outputs.digest }}\`"
+            echo "- Digest: \`${{ steps.push.outputs.digest }}\`"
           } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:

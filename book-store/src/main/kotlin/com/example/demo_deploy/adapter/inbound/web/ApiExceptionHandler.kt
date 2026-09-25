@@ -1,6 +1,7 @@
 package com.example.demo_deploy.adapter.inbound.web
 
 import com.example.demo_deploy.domain.BookKind
+import com.example.demo_deploy.domain.InvalidBookKindException
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
