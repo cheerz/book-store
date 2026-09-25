@@ -46,4 +46,21 @@ tasks.register<Test>("integrationTest") {
 
 	// Toujours relancer : le résultat dépend de l'appli distante, pas des sources.
 	outputs.upToDateWhen { false }
+
+	// Par défaut Gradle ne dit rien des tests qui passent. Sur une suite qui
+	// interroge un service distant, savoir ce qui a été joué compte autant que
+	// savoir ce qui a cassé.
+	testLogging {
+		events("passed", "skipped", "failed")
+		exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+		showStackTraces = true
+	}
+}
+
+// Sous la tâche `ti` de la racine : la pile doit être debout avant les tests,
+// et démontée après, qu'ils passent ou non. Les finalizers se neutralisent
+// d'eux-mêmes quand cette tâche est lancée seule contre une cible externe.
+tasks.named("integrationTest") {
+	mustRunAfter(":composeUp")
+	finalizedBy(":composeLogs", ":composeDown")
 }
