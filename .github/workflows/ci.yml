@@ -203,7 +203,7 @@ jobs:
       - name: Deploy serverless container
         run: |
           scw container container update ${{ secrets.SCW_CONTAINER_ID }} \
-            registry-image=${{ env.IMAGE }}:sha-${{ github.sha }} \
+            image=${{ env.IMAGE }}:sha-${{ github.sha }} \
             region=${{ env.SCW_REGION }}
           scw container container deploy ${{ secrets.SCW_CONTAINER_ID }} \
             region=${{ env.SCW_REGION }}
