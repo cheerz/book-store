@@ -19,7 +19,7 @@ permissions:
 
 env:
   SCW_REGION: fr-par
-  IMAGE: rg.fr-par.scw.cloud/demo-deploy/springboot
+  IMAGE: rg.fr-par.scw.cloud/book-store/springboot
   HEALTH_PATH: /api/health
 
 jobs:
