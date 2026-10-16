@@ -302,5 +302,5 @@ jobs:
         run: |
           curl --fail --silent --show-error \
             --retry 12 --retry-delay 10 --retry-all-errors \
-            "https://${{ steps.deploy.outputs.domain }}${{ env.HEALTH_PATH }}"
-          echo "Preview deployed: https://${{ steps.deploy.outputs.domain }}${{ env.HEALTH_PATH }}" >> "$GITHUB_STEP_SUMMARY"
+            "${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
+          echo "Preview deployed: ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}" >> "$GITHUB_STEP_SUMMARY"
