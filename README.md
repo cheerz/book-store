@@ -1,6 +1,7 @@
         # demo-deploy
 
 API Spring Boot (Kotlin) de gestion d'un catalogue de livres, servie sous `/api`.
+Les fronts n'appellent que les vues BFF (`/pages/...`).
 
 ## Prérequis
 
@@ -17,8 +18,9 @@ L'API répond sur `http://localhost:8080/api` :
 
 ```bash
 curl localhost:8080/api/health
-curl localhost:8080/api/books
-curl -H 'Content-Type: application/json' -d '{"title":"Dune","bookKind":"sf"}' localhost:8080/api/books
+curl localhost:8080/api/pages/home
+curl localhost:8080/api/pages/catalog
+curl -H 'Content-Type: application/json' -d '{"title":"Dune","bookKind":"sf","bookSize":"big","priceInCents":1200}' localhost:8080/api/pages/catalog/books
 ```
 
 Pour la lancer dans Docker, comme en production :
