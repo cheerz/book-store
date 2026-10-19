@@ -8,6 +8,28 @@ Les fronts n'appellent que les vues BFF (`/pages/...`).
 - JDK 25
 - Docker, avec `docker compose` ou `docker-compose` (sur macOS : `colima start`)
 
+### Installer Java 25 sur macOS
+
+Avec [Homebrew](https://brew.sh) :
+
+```bash
+brew install openjdk@25
+sudo ln -sfn /opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-25.jdk
+```
+
+Ou avec [SDKMAN!](https://sdkman.io) :
+
+```bash
+curl -s "https://get.sdkman.io" | bash
+sdk install java 25-tem
+```
+
+Vérifier l'installation :
+
+```bash
+java -version
+```
+
 ## Lancer l'application
 
 ```bash

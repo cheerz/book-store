@@ -1,0 +1,47 @@
+name: Clean up PR preview
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+env:
+  SCW_REGION: fr-par
+  PR_PREVIEW_NAMESPACE: book-store-pr-preview
+
+jobs:
+  cleanup-pr-preview:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Scaleway CLI
+        uses: scaleway/action-scw@v0
+        with:
+          save-config: true
+          export-config: true
+          access-key: ${{ secrets.SCW_ACCESS_KEY }}
+          secret-key: ${{ secrets.SCW_SECRET_KEY }}
+          default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
+          default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+
+      # Idempotent : si la PR a été fermée avant son premier déploiement de
+      # preview, le container n'existe simplement pas encore.
+      - name: Delete preview container
+        env:
+          CONTAINER_NAME: book-store-pr-${{ github.event.pull_request.number }}
+        run: |
+          NAMESPACE_ID=$(scw container namespace list name="${{ env.PR_PREVIEW_NAMESPACE }}" \
+            region=${{ env.SCW_REGION }} -o json | jq -r '.[0].id')
+
+          CONTAINER_ID=$(scw container container list namespace-id="$NAMESPACE_ID" \
+            name="$CONTAINER_NAME" region=${{ env.SCW_REGION }} -o json | jq -r '.[0].id // empty')
+
+          if [ -n "$CONTAINER_ID" ]; then
+            scw container container delete "$CONTAINER_ID" region=${{ env.SCW_REGION }}
+          else
+            echo "Aucun container de preview pour $CONTAINER_NAME, rien à nettoyer."
+          fi
