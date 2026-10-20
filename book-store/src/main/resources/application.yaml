@@ -19,3 +19,4 @@ management:
     health:
       probes:
         enabled: true
+test: test
