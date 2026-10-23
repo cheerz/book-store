@@ -3,7 +3,7 @@ package com.example.demo_deploy.catalog.domain
 data class Book(
     val title: String,
     val kind: BookKind,
-    val size: BookSize,
+    val format: BookFormat,
     val priceInCents: Long,
 ) {
     init {

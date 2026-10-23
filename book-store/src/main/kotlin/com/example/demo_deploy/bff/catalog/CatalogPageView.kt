@@ -1,9 +1,9 @@
 package com.example.demo_deploy.bff.catalog
 
 import com.example.demo_deploy.catalog.domain.Book
+import com.example.demo_deploy.catalog.domain.BookFormat
 import com.example.demo_deploy.catalog.domain.BookKind
 import com.example.demo_deploy.catalog.domain.BookManager
-import com.example.demo_deploy.catalog.domain.BookSize
 import com.example.demo_deploy.pricing.domain.PriceManager
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
@@ -21,7 +21,10 @@ class CatalogPageView(
 
     @GetMapping
     fun page(): CatalogPageDto =
-        CatalogPageDto(books = bookManager.getBooks().map(::toItem))
+        CatalogPageDto(
+            books = bookManager.getBooks().map(::toItem),
+            formats = BookFormat.entries.map(::toFormatOption),
+        )
 
     @PostMapping("/books")
     fun addBook(@Valid @RequestBody request: AddBookRequestDto): CatalogPageDto {
@@ -30,23 +33,29 @@ class CatalogPageView(
     }
 
     private fun toItem(book: Book): CatalogPageItem {
-        val quote = priceManager.quote(basePriceInCents = book.priceInCents, productType = book.size.name)
+        val quote = priceManager.quote(basePriceInCents = book.priceInCents, productType = book.format.name)
 
         return CatalogPageItem(
             title = book.title,
             kind = book.kind.name.lowercase(),
-            size = book.size.name.lowercase(),
+            format = book.format.label,
             bookPriceInCents = quote.base.amountInCents,
-            sizePriceInCents = quote.surcharge.amountInCents,
+            formatPriceInCents = quote.surcharge.amountInCents,
             totalPriceInCents = quote.total.amountInCents,
         )
+    }
+
+    private fun toFormatOption(format: BookFormat): FormatOption {
+        val quote = priceManager.quote(basePriceInCents = 0, productType = format.name)
+
+        return FormatOption(format = format.label, priceInCents = quote.surcharge.amountInCents)
     }
 
     private fun toBook(request: AddBookRequestDto): Book =
         Book(
             title = request.title,
             kind = BookKind.fromLabel(request.bookKind),
-            size = BookSize.fromLabel(request.bookSize),
+            format = BookFormat.fromLabel(request.bookFormat),
             priceInCents = checkNotNull(request.priceInCents),
         )
 }

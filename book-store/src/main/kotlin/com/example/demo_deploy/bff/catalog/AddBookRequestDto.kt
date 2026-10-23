@@ -12,7 +12,7 @@ data class AddBookRequestDto(
     val bookKind: String,
 
     @field:NotBlank
-    val bookSize: String,
+    val bookFormat: String,
 
     @field:NotNull
     val priceInCents: Long?,

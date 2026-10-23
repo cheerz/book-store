@@ -2,9 +2,9 @@ package com.example.demo_deploy.bff.error
 
 import com.example.demo_deploy.bff.catalog.AddBookRequestDto
 import com.example.demo_deploy.bff.catalog.CatalogPageView
+import com.example.demo_deploy.catalog.domain.InvalidBookFormatException
 import com.example.demo_deploy.catalog.domain.InvalidBookKindException
 import com.example.demo_deploy.catalog.domain.InvalidBookPriceException
-import com.example.demo_deploy.catalog.domain.InvalidBookSizeException
 import com.example.demo_deploy.pricing.domain.InvalidPriceException
 import com.example.demo_deploy.pricing.domain.UnknownProductTypeException
 import org.springframework.core.MethodParameter
@@ -34,12 +34,12 @@ class ErrorHandlingAdviceTest {
     }
 
     @Test
-    fun `wraps an invalid book size in CBE-8`() {
-        val (status, error) = errorFor(InvalidBookSizeException("huge"))
+    fun `wraps an invalid book format in CBE-8`() {
+        val (status, error) = errorFor(InvalidBookFormatException("huge"))
 
         assertEquals(422, status)
         assertEquals("CBE-8", error.errorCode)
-        assertEquals("Only accepted sizes: small, medium, big (received: huge)", error.developerMessage)
+        assertEquals("Only accepted formats: e-book, pocket, hardcover (received: huge)", error.developerMessage)
     }
 
     @Test
@@ -54,7 +54,7 @@ class ErrorHandlingAdviceTest {
 
     @Test
     fun `wraps an invalid request body in CBE-1`() {
-        val body = AddBookRequestDto("", "sf", "big", 1_000)
+        val body = AddBookRequestDto("", "sf", "hardcover", 1_000)
         val bindingResult = BeanPropertyBindingResult(body, "request").apply {
             rejectValue("title", "NotBlank", "must not be blank")
         }

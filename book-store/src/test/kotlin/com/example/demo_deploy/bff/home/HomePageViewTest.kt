@@ -1,9 +1,9 @@
 package com.example.demo_deploy.bff.home
 
 import com.example.demo_deploy.catalog.domain.Book
+import com.example.demo_deploy.catalog.domain.BookFormat
 import com.example.demo_deploy.catalog.domain.BookKind
 import com.example.demo_deploy.catalog.domain.BookManager
-import com.example.demo_deploy.catalog.domain.BookSize
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -11,10 +11,10 @@ class HomePageViewTest {
 
     private val books = object : BookManager {
         override fun getBooks() = listOf(
-            Book("Bilbo", BookKind.FANTASY, BookSize.SMALL, 1_000),
-            Book("Dune", BookKind.SF, BookSize.SMALL, 1_000),
-            Book("Hyperion", BookKind.SF, BookSize.SMALL, 1_000),
-            Book("Shining", BookKind.THRILLER, BookSize.SMALL, 1_000),
+            Book("Bilbo", BookKind.FANTASY, BookFormat.E_BOOK, 1_000),
+            Book("Dune", BookKind.SF, BookFormat.E_BOOK, 1_000),
+            Book("Hyperion", BookKind.SF, BookFormat.E_BOOK, 1_000),
+            Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 1_000),
         )
         override fun createBook(book: Book) = book
     }

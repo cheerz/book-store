@@ -9,7 +9,7 @@ class BookTest {
     @Test
     fun `rejects a negative price`() {
         val refused = assertFailsWith<InvalidBookPriceException> {
-            Book("Dune", BookKind.SF, BookSize.SMALL, -1)
+            Book("Dune", BookKind.SF, BookFormat.E_BOOK, -1)
         }
 
         assertEquals(-1, refused.receivedPriceInCents)

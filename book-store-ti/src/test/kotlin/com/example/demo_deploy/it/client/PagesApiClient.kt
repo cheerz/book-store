@@ -40,9 +40,9 @@ data class CatalogPagePayload(val books: List<CatalogItemPayload>)
 data class CatalogItemPayload(
     val title: String,
     val kind: String,
-    val size: String,
+    val format: String,
     val bookPriceInCents: Long,
-    val sizePriceInCents: Long,
+    val formatPriceInCents: Long,
     val totalPriceInCents: Long,
 )
 

@@ -1,8 +1,8 @@
 package com.example.demo_deploy.bff.error
 
+import com.example.demo_deploy.catalog.domain.InvalidBookFormatException
 import com.example.demo_deploy.catalog.domain.InvalidBookKindException
 import com.example.demo_deploy.catalog.domain.InvalidBookPriceException
-import com.example.demo_deploy.catalog.domain.InvalidBookSizeException
 import com.example.demo_deploy.pricing.domain.InvalidPriceException
 import java.util.UUID
 import org.springframework.http.ResponseEntity
@@ -36,7 +36,7 @@ class ErrorHandlingAdvice {
     private fun cbeFor(exception: Exception): CbeError =
         when (exception) {
             is InvalidBookKindException -> CbeError.UNSUPPORTED_BOOK_KIND
-            is InvalidBookSizeException -> CbeError.INVALID_BOOK_DEFINITION
+            is InvalidBookFormatException -> CbeError.INVALID_BOOK_DEFINITION
             is InvalidBookPriceException, is InvalidPriceException -> CbeError.INVALID_PRICE_DEFINITION
             is ErrorResponse, is HttpMessageNotReadableException -> CbeError.BAD_REQUEST
             else -> CbeError.SERVER_ERROR
