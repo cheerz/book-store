@@ -16,7 +16,7 @@ class BookManagerImplTest {
 
     @Test
     fun `returns the books held by the repository`() {
-        val dune = Book("Dune", BookKind.SF, BookSize.BIG, 1_200)
+        val dune = Book("Dune", BookKind.SF, BookFormat.HARDCOVER, 1_200)
         val bookManager = BookManagerImpl(FakeBookRepository(mutableListOf(dune)))
 
         assertEquals(listOf(dune), bookManager.getBooks())
@@ -27,9 +27,9 @@ class BookManagerImplTest {
         val repository = FakeBookRepository()
         val bookManager = BookManagerImpl(repository)
 
-        val created = bookManager.createBook(Book("Shining", BookKind.THRILLER, BookSize.SMALL, 900))
+        val created = bookManager.createBook(Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 900))
 
-        assertEquals(Book("Shining", BookKind.THRILLER, BookSize.SMALL, 900), created)
+        assertEquals(Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 900), created)
         assertEquals(listOf(created), repository.findAll())
     }
 }

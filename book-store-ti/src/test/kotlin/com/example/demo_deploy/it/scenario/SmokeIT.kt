@@ -33,7 +33,7 @@ class SmokeIT : IntegrationTest() {
     }
 
     @Test
-    fun `I can't add a book of an unknown size to the Catalogue`() {
+    fun `I can't add a book of an unknown format to the Catalogue`() {
         val title = uniqueTitle("huge")
 
         assertRefusedWith("CBE-8", BookPayload(title, "sf", "huge"))
@@ -43,7 +43,7 @@ class SmokeIT : IntegrationTest() {
     fun `I can't add a book with a negative price to the Catalogue`() {
         val title = uniqueTitle("negative")
 
-        assertRefusedWith("CBE-9", BookPayload(title, "sf", "small", -100))
+        assertRefusedWith("CBE-9", BookPayload(title, "sf", "e-book", -100))
     }
 
     private fun assertRefusedWith(errorCode: String, book: BookPayload) {

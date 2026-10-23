@@ -8,9 +8,9 @@ import org.springframework.stereotype.Repository
 class InMemoryPriceRepositoryImpl : PriceRepository {
 
     private val prices: Map<String, Price> = mapOf(
-        "SMALL" to Price(1_000),
-        "MEDIUM" to Price(750),
-        "BIG" to Price(500),
+        "HARDCOVER" to Price(1_000),
+        "POCKET" to Price(750),
+        "E_BOOK" to Price(500),
     )
 
     override fun findByProductType(productType: String): Price? = prices[productType]
