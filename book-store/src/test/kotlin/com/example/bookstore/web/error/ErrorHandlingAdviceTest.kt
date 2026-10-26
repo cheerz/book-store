@@ -51,7 +51,7 @@ class ErrorHandlingAdviceTest {
 
         assertEquals(422, status)
         assertEquals("BBE-10", error.errorCode)
-        assertEquals("Unsupported book kind.", error.developerSummary)
+        assertEquals("Invalid book kind.", error.developerSummary)
         assertEquals("Only accepted kinds: fantasy, sf, thriller (received: romance)", error.developerMessage)
     }
 

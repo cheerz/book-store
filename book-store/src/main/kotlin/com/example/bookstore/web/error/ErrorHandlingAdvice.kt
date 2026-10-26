@@ -41,8 +41,8 @@ class ErrorHandlingAdvice {
 
     private fun bbeFor(exception: Exception): BbeError =
         when (exception) {
-            is InvalidBookKindException -> BbeError.UNSUPPORTED_BOOK_KIND
-            is InvalidBookFormatException -> BbeError.INVALID_BOOK_DEFINITION
+            is InvalidBookKindException -> BbeError.INVALID_BOOK_KIND
+            is InvalidBookFormatException -> BbeError.INVALID_BOOK_FORMAT
             is InvalidBookTitleException -> BbeError.INVALID_BOOK_TITLE
             is InvalidBookPriceException, is InvalidPriceException -> BbeError.INVALID_PRICE_DEFINITION
             is MissingProductPriceException -> BbeError.MISSING_PRODUCT_PRICE
