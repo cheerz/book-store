@@ -1,5 +1,3 @@
-// Racine = pom parent : elle ne produit aucun artefact.
-// Elle fixe les versions de plugins et la configuration commune aux modules.
 plugins {
     kotlin("jvm") version "2.3.21" apply false
     kotlin("plugin.spring") version "2.3.21" apply false
@@ -9,7 +7,6 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
 }
 
-// Racine comprise : ktlint y lint les build scripts .kts, et doit y résoudre son binaire.
 allprojects {
     repositories {
         mavenCentral()
@@ -31,7 +28,6 @@ val compose = "./scripts/compose.sh"
 val composeUp by tasks.registering(Exec::class) {
     group = "docker"
     description = "Builds the image from the current jar and starts the stack."
-    // Le Dockerfile copie le jar, il ne le construit pas.
     dependsOn(":book-store:bootJar")
     commandLine(compose, "up", "-d", "--build")
 }

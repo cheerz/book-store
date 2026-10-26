@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Wrapper compose : le plugin v2 (`docker compose`) n'est pas installé partout,
-# le binaire v1 (`docker-compose`) si. Les runners GitHub ont v2.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."

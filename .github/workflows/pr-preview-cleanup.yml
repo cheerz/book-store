@@ -28,8 +28,6 @@ jobs:
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
 
-      # Idempotent : si la PR a été fermée avant son premier déploiement de
-      # preview, le container n'existe simplement pas encore.
       - name: Delete preview container
         env:
           CONTAINER_NAME: book-store-pr-${{ github.event.pull_request.number }}

@@ -1,4 +1,4 @@
-# demo-deploy
+# book-store
 
 API Spring Boot (Kotlin) de gestion d'un catalogue de livres, servie sous `/api`.
 Les fronts n'appellent que les vues BFF (`/pages/...`).
@@ -43,7 +43,7 @@ L'API répond sur `http://localhost:8080/api` :
 curl localhost:8080/api/health
 curl localhost:8080/api/pages/home
 curl localhost:8080/api/pages/catalog
-curl -H 'Content-Type: application/json' -d '{"title":"Dune","bookKind":"sf","bookFormat":"hardcover","priceInCents":1200}' localhost:8080/api/pages/catalog/books
+curl -H 'Content-Type: application/json' -d '{"title":"Dune","kind":"sf","format":"hardcover","bookPriceInCents":1200}' localhost:8080/api/pages/catalog/books
 ```
 
 Pour la lancer dans Docker, comme en production :
@@ -141,11 +141,12 @@ On garde l'essentiel : le domaine ne dépend d'aucun adapter, et tout passe par 
 ### BFF : adapter inbound et orchestrateur
 
 Le package `bff/` est l'adapter inbound de l'application : c'est le seul point d'entrée des fronts.
+Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à part, dans `web/`.
 
-- **Une vue par page** : `/pages/home`, `/pages/catalog`. Chaque vue renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
-- **Orchestrateur** : une vue peut appeler plusieurs domaines. `CatalogPageView` combine `catalog` (les livres) et `pricing` (le prix de chaque format).
+- **Un contrôleur par page** : `/pages/home`, `/pages/catalog`. Chaque contrôleur (`HomePageController`, `CatalogPageController`) renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
+- **Orchestrateur** : un contrôleur peut appeler plusieurs domaines. `CatalogPageController` combine `catalog` (les livres) et `pricing` (le prix de chaque format).
 - **Traduction typée entre domaines** : `catalog` parle de `BookFormat`, `pricing` de `ProductType`. Le BFF passe de l'un à l'autre avec un `when` exhaustif : un format ajouté sans son type de produit ne compile pas. Côté `pricing`, les prix sont en base : un type de produit ajouté sans son prix dans `data.sql` fait échouer `JpaPriceRepositoryTest`.
-- **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par une nouvelle vue, sans modifier les endpoints ni les domaines existants.
+- **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par un nouveau contrôleur, sans modifier les endpoints ni les domaines existants.
 - **Pas de règle métier dans le BFF** : il agrège, mappe et met en forme. Les règles restent dans les domaines.
 
 ### Adapter inbound par domaine : optionnel
@@ -172,9 +173,9 @@ Si un domaine doit un jour se passer de Spring (librairie partagée, autre runti
 ### Erreurs
 
 - Les domaines lèvent des exceptions métier nommées.
-- `bff/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `CBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "status_code", "error_code", "user_message", "developer_summary", "developer_message", "request_id" } }`.
-- `user_message` est le seul texte destiné à l'utilisateur final : c'est lui que le front affiche. Les champs `developer_*` restent pour le debug.
-- `developer_message` ne contient que des messages écrits dans ce code : celui de l'exception métier, ou la liste des champs invalides. Les messages de Spring et de Jackson ne partent jamais au client, car ils contiennent des noms de classes internes.
+- `web/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `CBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "statusCode", "errorCode", "userMessage", "developerSummary", "developerMessage", "requestId" } }`.
+- `userMessage` est le seul texte destiné à l'utilisateur final : c'est lui que le front affiche. Les champs `developer*` restent pour le debug.
+- `developerMessage` ne contient que des messages écrits dans ce code : celui de l'exception métier, ou la liste des champs invalides. Les messages de Spring et de Jackson ne partent jamais au client, car ils contiennent des noms de classes internes.
 - Les erreurs du framework gardent leur statut : route inconnue → `CBE-7` (404), méthode non supportée → `CBE-12` (405).
 - Une exception non mappée devient `CBE-0` (500), sans exposer son message.
 
@@ -182,7 +183,7 @@ Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `CbeE
 
 ### Logs et request id
 
-- `bff/observability/RequestIdFilter` attribue un id à chaque requête. Le même id est renvoyé dans l'en-tête `X-Request-Id`, dans le `request_id` des erreurs, et il préfixe chaque ligne de log (`logging.pattern.level`).
+- `web/observability/RequestIdFilter` attribue un id à chaque requête. Le même id est renvoyé dans l'en-tête `X-Request-Id`, dans le `requestId` des erreurs, et il préfixe chaque ligne de log (`logging.pattern.level`).
 - Le front affiche cet id comme « Référence » sous un message d'erreur : un utilisateur peut le transmettre, et on retrouve la requête dans les logs.
 - Un 5xx est loggué en `ERROR` avec sa stack trace. Une erreur client est logguée en `WARN` avec son code et sa classe seulement : son message reprend la saisie de l'utilisateur, qui pourrait injecter de fausses lignes de log.
 
@@ -234,4 +235,3 @@ ktlint → TU → jar → image construite une fois → TI sur cette image
 - ktlint 1.8.0, via le plugin Gradle `org.jlleitschuh.gradle.ktlint` 14.2.0, appliqué à tous les modules et aux build scripts `.kts`.
 - Style `ktlint_official`, configuré dans `.editorconfig`.
 - Première étape de la CI : un écart de style fait échouer le build avant les tests.
-- La règle `package-name` est désactivée tant que le package `com.example.demo_deploy` (avec un underscore) n'est pas renommé.

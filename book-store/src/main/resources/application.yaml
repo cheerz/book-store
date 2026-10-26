@@ -1,21 +1,16 @@
 spring:
   application:
-    name: demo-deploy
+    name: book-store
   datasource:
-    # Embedded HSQLDB, stored on disk next to the working directory (./data).
-    # write_delay=false flushes each commit: a killed container loses nothing it acknowledged.
     url: "jdbc:hsqldb:file:./data/book-store;shutdown=true;hsqldb.write_delay=false"
     username: sa
   jpa:
     open-in-view: false
-    # data.sql needs the tables: play it after Hibernate has created them.
     defer-datasource-initialization: true
     hibernate:
-      # Hibernate creates missing tables and columns from the entities. It never drops or renames anything.
       ddl-auto: update
   sql:
     init:
-      # A file database is not "embedded" for Spring: without "always", data.sql would be skipped.
       mode: always
 
 server:
@@ -25,15 +20,11 @@ server:
 
 logging:
   pattern:
-    # Prefixes every log line with the request id set by RequestIdFilter,
-    # the same id the client receives in X-Request-Id and in error responses.
     level: "%5p [%X{requestId:-}]"
 
 management:
   endpoints:
     web:
-      # Endpoints served at the context root instead of /actuator,
-      # so the health check is /api/health.
       base-path: "/"
       exposure:
         include: health

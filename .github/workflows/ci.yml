@@ -8,8 +8,6 @@ on:
     branches:
       - master
 
-# Une file d'attente par branche : les runs d'une PR s'annulent entre eux,
-# ceux de master s'enchaînent pour ne jamais couper un déploiement.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -40,11 +38,9 @@ jobs:
       - name: Set up Gradle (cache + wrapper validation)
         uses: gradle/actions/setup-gradle@v4
 
-      # Le lint d'abord : le moins cher, il échoue avant de compiler les tests.
       - name: Lint (ktlint)
         run: ./gradlew ktlintCheck
 
-      # Trois couches, de la moins chère à la plus chère.
       - name: Unit tests
         run: ./gradlew :book-store:test
 
@@ -65,8 +61,6 @@ jobs:
           path: book-store/build/libs/app.jar
           retention-days: 1
 
-  # Sur chaque PR et chaque push : l'image candidate est testée en boîte noire
-  # juste après les TU, sans secret ni registry.
   integration-test:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -125,8 +119,6 @@ jobs:
         if: always()
         run: docker compose down -v
 
-      # On transmet l'image testée, pas un rebuild : ce qui part en prod (ou en
-      # preview de PR) est exactement ce que les TI ont validé.
       - name: Export tested image
         if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'pull_request'
         run: docker save book-store:candidate -o "$RUNNER_TEMP/book-store.tar"
@@ -222,8 +214,6 @@ jobs:
             "https://${DOMAIN}${HEALTH_PATH}"
           echo "Deployed: https://${DOMAIN}${HEALTH_PATH}" >> "$GITHUB_STEP_SUMMARY"
 
-  # Sur chaque push vers une branche de PR : l'image testée part vers un tag
-  # dédié à la PR, pour alimenter le déploiement de preview.
   push-to-scw-pr-preview:
     needs: integration-test
     if: github.event_name == 'pull_request'
@@ -253,8 +243,6 @@ jobs:
           docker tag book-store:candidate "${{ env.IMAGE }}:${TAG}"
           docker push "${{ env.IMAGE }}:${TAG}"
 
-  # Un container par PR dans le namespace de preview (book-store-pr-preview) :
-  # créé au premier push, mis à jour et redéployé à chaque push suivant.
   deploy-pr-preview:
     needs: push-to-scw-pr-preview
     if: github.event_name == 'pull_request'
@@ -298,7 +286,6 @@ jobs:
               region=${{ env.SCW_REGION }}
           fi
 
-          
           PUBLIC_ENDPOINT=$(scw container container get "$CONTAINER_ID" region=${{ env.SCW_REGION }} -o json | jq -r .public_endpoint)
           echo "public_endpoint=$PUBLIC_ENDPOINT" >> "$GITHUB_OUTPUT"
 

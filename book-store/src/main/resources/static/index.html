@@ -154,9 +154,9 @@
           <fieldset>
             <legend>Genre</legend>
             <div class="choices">
-              <label class="choice"><input type="radio" name="bookKind" value="fantasy" checked><span class="kind-dot" data-kind="fantasy"></span>fantasy</label>
-              <label class="choice"><input type="radio" name="bookKind" value="sf"><span class="kind-dot" data-kind="sf"></span>sf</label>
-              <label class="choice"><input type="radio" name="bookKind" value="thriller"><span class="kind-dot" data-kind="thriller"></span>thriller</label>
+              <label class="choice"><input type="radio" name="kind" value="fantasy" checked><span class="kind-dot" data-kind="fantasy"></span>fantasy</label>
+              <label class="choice"><input type="radio" name="kind" value="sf"><span class="kind-dot" data-kind="sf"></span>sf</label>
+              <label class="choice"><input type="radio" name="kind" value="thriller"><span class="kind-dot" data-kind="thriller"></span>thriller</label>
             </div>
           </fieldset>
           <fieldset>
@@ -174,7 +174,6 @@
   </div>
 
   <script>
-    // Relative URLs: the app runs under the /api context path, and this page is served from it.
     const ENDPOINTS = { home: "pages/home", catalog: "pages/catalog", addBook: "pages/catalog/books" };
     const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 
@@ -200,11 +199,10 @@
       return body;
     }
 
-    // The developer fields stay in the console: user_message is the only text meant for the end user.
     function showError(error) {
       console.error(error);
-      const lines = error?.user_message
-        ? [error.user_message, error.request_id && `Référence : ${error.request_id}`]
+      const lines = error?.userMessage
+        ? [error.userMessage, error.requestId && `Référence : ${error.requestId}`]
         : ["Le service ne répond pas, réessaie dans quelques instants."];
       document.getElementById("error").textContent = lines.filter(Boolean).join("\n");
     }
@@ -250,7 +248,7 @@
 
     function formatOption(option, index) {
       const radio = element("input");
-      Object.assign(radio, { type: "radio", name: "bookFormat", value: option.format, required: true });
+      Object.assign(radio, { type: "radio", name: "format", value: option.format, required: true });
       radio.defaultChecked = index === 0;
       radio.dataset.priceInCents = option.priceInCents;
       const shape = element("span", "format-shape");
@@ -273,10 +271,10 @@
 
     function updatePreview() {
       const form = document.getElementById("add-book");
-      const selectedFormat = form.querySelector("input[name=bookFormat]:checked");
+      const selectedFormat = form.querySelector("input[name=format]:checked");
       document.getElementById("preview").replaceChildren(bookCover({
         title: form.elements.title.value || "Ton titre ici",
-        kind: form.querySelector("input[name=bookKind]:checked").value,
+        kind: form.querySelector("input[name=kind]:checked").value,
         format: selectedFormat?.value ?? "hardcover",
         priceLabel: totalPriceLabel(form, selectedFormat),
       }));
@@ -314,9 +312,9 @@
       const fields = Object.fromEntries(new FormData(form));
       const payload = {
         title: fields.title,
-        bookKind: fields.bookKind,
-        bookFormat: fields.bookFormat,
-        priceInCents: centsFromEuros(fields.price),
+        kind: fields.kind,
+        format: fields.format,
+        bookPriceInCents: centsFromEuros(fields.price),
       };
       try {
         renderCatalog(await requestPage(ENDPOINTS.addBook, {
