@@ -40,6 +40,10 @@ jobs:
       - name: Set up Gradle (cache + wrapper validation)
         uses: gradle/actions/setup-gradle@v4
 
+      # Le lint d'abord : le moins cher, il échoue avant de compiler les tests.
+      - name: Lint (ktlint)
+        run: ./gradlew ktlintCheck
+
       # Trois couches, de la moins chère à la plus chère.
       - name: Unit tests
         run: ./gradlew :book-store:test

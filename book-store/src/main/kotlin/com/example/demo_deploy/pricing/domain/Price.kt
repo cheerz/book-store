@@ -1,6 +1,8 @@
 package com.example.demo_deploy.pricing.domain
 
-data class Price(val amountInCents: Long) {
+data class Price(
+    val amountInCents: Long,
+) {
     init {
         if (amountInCents < 0) throw InvalidPriceException(amountInCents)
     }

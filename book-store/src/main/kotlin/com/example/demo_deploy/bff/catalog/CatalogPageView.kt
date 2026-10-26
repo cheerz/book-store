@@ -18,7 +18,6 @@ class CatalogPageView(
     private val bookManager: BookManager,
     private val priceManager: PriceManager,
 ) {
-
     @GetMapping
     fun page(): CatalogPageDto =
         CatalogPageDto(
@@ -27,7 +26,9 @@ class CatalogPageView(
         )
 
     @PostMapping("/books")
-    fun addBook(@Valid @RequestBody request: AddBookRequestDto): CatalogPageDto {
+    fun addBook(
+        @Valid @RequestBody request: AddBookRequestDto,
+    ): CatalogPageDto {
         bookManager.createBook(toBook(request))
         return page()
     }

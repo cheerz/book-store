@@ -1,0 +1,15 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+indent_style = space
+indent_size = 4
+ktlint_code_style = ktlint_official
+# Le package com.example.demo_deploy contient un underscore. Règle désactivée
+# tant que le package n'est pas renommé : la réactiver avec le renommage.
+ktlint_standard_package-name = disabled

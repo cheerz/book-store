@@ -4,8 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class BookManagerImplTest {
-
-    private class FakeBookRepository(private val stored: MutableList<Book> = mutableListOf()) : BookRepository {
+    private class FakeBookRepository(
+        private val stored: MutableList<Book> = mutableListOf(),
+    ) : BookRepository {
         override fun findAll(): List<Book> = stored
 
         override fun create(book: Book): Book {

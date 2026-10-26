@@ -3,7 +3,9 @@ package com.example.demo_deploy.bff.error
 import com.fasterxml.jackson.annotation.JsonInclude
 import com.fasterxml.jackson.annotation.JsonProperty
 
-data class ErrorEnvelopeDto(val error: ErrorResponseDto)
+data class ErrorEnvelopeDto(
+    val error: ErrorResponseDto,
+)
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 data class ErrorResponseDto(

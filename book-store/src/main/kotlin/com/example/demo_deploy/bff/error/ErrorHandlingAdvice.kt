@@ -4,16 +4,15 @@ import com.example.demo_deploy.catalog.domain.InvalidBookFormatException
 import com.example.demo_deploy.catalog.domain.InvalidBookKindException
 import com.example.demo_deploy.catalog.domain.InvalidBookPriceException
 import com.example.demo_deploy.pricing.domain.InvalidPriceException
-import java.util.UUID
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.ErrorResponse
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
+import java.util.UUID
 
 @RestControllerAdvice
 class ErrorHandlingAdvice {
-
     @ExceptionHandler(Exception::class)
     fun handleExceptions(exception: Exception): ResponseEntity<ErrorEnvelopeDto> {
         val cbe = cbeFor(exception)

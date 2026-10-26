@@ -8,16 +8,14 @@ import org.springframework.stereotype.Repository
 
 @Repository
 class InMemoryBookRepository : BookRepository {
+    val books: MutableList<Book> =
+        mutableListOf(
+            Book("LSDA : La communauté de l'anneau", BookKind.FANTASY, BookFormat.HARDCOVER, 1_500),
+            Book("LSDA : Les deux tours", BookKind.FANTASY, BookFormat.E_BOOK, 700),
+            Book("LSDA : Le retour du roi", BookKind.FANTASY, BookFormat.POCKET, 1_000),
+        )
 
-    val books: MutableList<Book> = mutableListOf(
-        Book("LSDA : La communauté de l'anneau", BookKind.FANTASY, BookFormat.HARDCOVER, 1_500),
-        Book("LSDA : Les deux tours", BookKind.FANTASY, BookFormat.E_BOOK, 700),
-        Book("LSDA : Le retour du roi", BookKind.FANTASY, BookFormat.POCKET, 1_000),
-    )
-
-    override fun findAll(): List<Book> {
-        return books
-    }
+    override fun findAll(): List<Book> = books
 
     override fun create(book: Book): Book {
         books.add(book)

@@ -3,7 +3,6 @@ package com.example.demo_deploy.it.env
 import java.time.Duration
 
 object TestEnvironment {
-
     val baseUrl: String =
         System.getProperty("base.url")
             ?: System.getenv("BASE_URL")

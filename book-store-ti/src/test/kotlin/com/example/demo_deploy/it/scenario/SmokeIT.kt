@@ -10,7 +10,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SmokeIT : IntegrationTest() {
-
     @Test
     fun `the catalog page is reachable`() {
         assertTrue(pages.catalogPage().books.isNotEmpty())
@@ -46,10 +45,14 @@ class SmokeIT : IntegrationTest() {
         assertRefusedWith("CBE-9", BookPayload(title, "sf", "e-book", -100))
     }
 
-    private fun assertRefusedWith(errorCode: String, book: BookPayload) {
-        val refused = assertFailsWith<FeignException.UnprocessableEntity> {
-            pages.addBook(book)
-        }
+    private fun assertRefusedWith(
+        errorCode: String,
+        book: BookPayload,
+    ) {
+        val refused =
+            assertFailsWith<FeignException.UnprocessableEntity> {
+                pages.addBook(book)
+            }
 
         assertTrue(refused.contentUTF8().contains("\"error_code\":\"$errorCode\""))
         assertFalse(pages.catalogPage().books.any { it.title == book.title })

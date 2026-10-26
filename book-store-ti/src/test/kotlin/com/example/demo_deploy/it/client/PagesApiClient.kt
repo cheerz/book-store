@@ -11,7 +11,6 @@ import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
 
 interface PagesApiClient {
-
     @RequestLine("GET /pages/catalog")
     fun catalogPage(): CatalogPagePayload
 
@@ -24,10 +23,13 @@ interface PagesApiClient {
 
     companion object {
         fun create(baseUrl: String = TestEnvironment.baseUrl): PagesApiClient {
-            val mapper = ObjectMapper().registerKotlinModule()
-                .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+            val mapper =
+                ObjectMapper()
+                    .registerKotlinModule()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
 
-            return Feign.builder()
+            return Feign
+                .builder()
                 .encoder(JacksonEncoder(mapper))
                 .decoder(JacksonDecoder(mapper))
                 .target(PagesApiClient::class.java, baseUrl)
@@ -35,7 +37,9 @@ interface PagesApiClient {
     }
 }
 
-data class CatalogPagePayload(val books: List<CatalogItemPayload>)
+data class CatalogPagePayload(
+    val books: List<CatalogItemPayload>,
+)
 
 data class CatalogItemPayload(
     val title: String,
@@ -46,4 +50,7 @@ data class CatalogItemPayload(
     val totalPriceInCents: Long,
 )
 
-data class HomePagePayload(val bookCount: Int, val latestTitles: List<String>)
+data class HomePagePayload(
+    val bookCount: Int,
+    val latestTitles: List<String>,
+)

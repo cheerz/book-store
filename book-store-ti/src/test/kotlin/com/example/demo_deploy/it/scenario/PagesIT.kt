@@ -6,7 +6,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class PagesIT : IntegrationTest() {
-
     @Test
     fun `the catalog page shows the price breakdown of each book`() {
         val title = uniqueTitle("dune")

@@ -1,6 +1,8 @@
 package com.example.demo_deploy.catalog.domain
 
-enum class BookFormat(val label: String) {
+enum class BookFormat(
+    val label: String,
+) {
     E_BOOK("e-book"),
     POCKET("pocket"),
     HARDCOVER("hardcover"),

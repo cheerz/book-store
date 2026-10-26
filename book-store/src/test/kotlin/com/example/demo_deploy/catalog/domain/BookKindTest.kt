@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class BookKindTest {
-
     @Test
     fun `resolves an accepted kind whatever its case`() {
         assertEquals(BookKind.SF, BookKind.fromLabel(" Sf "))
@@ -13,9 +12,10 @@ class BookKindTest {
 
     @Test
     fun `rejects a kind outside the accepted ones`() {
-        val refused = assertFailsWith<InvalidBookKindException> {
-            BookKind.fromLabel("romance")
-        }
+        val refused =
+            assertFailsWith<InvalidBookKindException> {
+                BookKind.fromLabel("romance")
+            }
 
         assertEquals("romance", refused.receivedKind)
     }

@@ -14,27 +14,35 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class CatalogPageViewTest {
+    private val books =
+        object : BookManager {
+            val stored =
+                mutableListOf(
+                    Book("Dune", BookKind.SF, BookFormat.HARDCOVER, 1_200),
+                    Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 900),
+                )
 
-    private val books = object : BookManager {
-        val stored = mutableListOf(
-            Book("Dune", BookKind.SF, BookFormat.HARDCOVER, 1_200),
-            Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 900),
-        )
-        override fun getBooks() = stored.toList()
-        override fun createBook(book: Book) = book.also { stored.add(it) }
-    }
+            override fun getBooks() = stored.toList()
 
-    private val prices = object : PriceManager {
-        override fun quote(basePriceInCents: Long, productType: String): PriceQuote {
-            val surcharge = when (productType) {
-                "HARDCOVER" -> Price(1_000)
-                "POCKET" -> Price(750)
-                "E_BOOK" -> Price(500)
-                else -> error("unexpected $productType")
-            }
-            return PriceQuote(Price(basePriceInCents), surcharge, Price(basePriceInCents) + surcharge)
+            override fun createBook(book: Book) = book.also { stored.add(it) }
         }
-    }
+
+    private val prices =
+        object : PriceManager {
+            override fun quote(
+                basePriceInCents: Long,
+                productType: String,
+            ): PriceQuote {
+                val surcharge =
+                    when (productType) {
+                        "HARDCOVER" -> Price(1_000)
+                        "POCKET" -> Price(750)
+                        "E_BOOK" -> Price(500)
+                        else -> error("unexpected $productType")
+                    }
+                return PriceQuote(Price(basePriceInCents), surcharge, Price(basePriceInCents) + surcharge)
+            }
+        }
 
     private val view = CatalogPageView(books, prices)
 

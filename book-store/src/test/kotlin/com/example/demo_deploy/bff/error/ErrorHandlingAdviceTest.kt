@@ -15,7 +15,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ErrorHandlingAdviceTest {
-
     private val advice = ErrorHandlingAdvice()
 
     private fun errorFor(exception: Exception): Pair<Int, ErrorResponseDto> {
@@ -55,13 +54,15 @@ class ErrorHandlingAdviceTest {
     @Test
     fun `wraps an invalid request body in CBE-1`() {
         val body = AddBookRequestDto("", "sf", "hardcover", 1_000)
-        val bindingResult = BeanPropertyBindingResult(body, "request").apply {
-            rejectValue("title", "NotBlank", "must not be blank")
-        }
-        val parameter = MethodParameter(
-            CatalogPageView::class.java.getMethod("addBook", AddBookRequestDto::class.java),
-            0,
-        )
+        val bindingResult =
+            BeanPropertyBindingResult(body, "request").apply {
+                rejectValue("title", "NotBlank", "must not be blank")
+            }
+        val parameter =
+            MethodParameter(
+                CatalogPageView::class.java.getMethod("addBook", AddBookRequestDto::class.java),
+                0,
+            )
 
         val (status, error) = errorFor(MethodArgumentNotValidException(parameter, bindingResult))
 

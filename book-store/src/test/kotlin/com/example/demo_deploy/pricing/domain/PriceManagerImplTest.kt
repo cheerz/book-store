@@ -5,13 +5,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class PriceManagerImplTest {
-
-    private val priceManager = PriceManagerImpl(
-        object : PriceRepository {
-            override fun findByProductType(productType: String) =
-                mapOf("SMALL" to Price(1_000))[productType]
-        },
-    )
+    private val priceManager =
+        PriceManagerImpl(
+            object : PriceRepository {
+                override fun findByProductType(productType: String) = mapOf("SMALL" to Price(1_000))[productType]
+            },
+        )
 
     @Test
     fun `adds the product type surcharge to the base price whatever its case`() {
@@ -23,9 +22,10 @@ class PriceManagerImplTest {
 
     @Test
     fun `refuses a product type without a price`() {
-        val refused = assertFailsWith<UnknownProductTypeException> {
-            priceManager.quote(basePriceInCents = 1_000, productType = "huge")
-        }
+        val refused =
+            assertFailsWith<UnknownProductTypeException> {
+                priceManager.quote(basePriceInCents = 1_000, productType = "huge")
+            }
 
         assertEquals("huge", refused.productType)
     }

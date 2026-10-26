@@ -6,12 +6,12 @@ import org.springframework.stereotype.Repository
 
 @Repository
 class InMemoryPriceRepositoryImpl : PriceRepository {
-
-    private val prices: Map<String, Price> = mapOf(
-        "HARDCOVER" to Price(1_000),
-        "POCKET" to Price(750),
-        "E_BOOK" to Price(500),
-    )
+    private val prices: Map<String, Price> =
+        mapOf(
+            "HARDCOVER" to Price(1_000),
+            "POCKET" to Price(750),
+            "E_BOOK" to Price(500),
+        )
 
     override fun findByProductType(productType: String): Price? = prices[productType]
 }

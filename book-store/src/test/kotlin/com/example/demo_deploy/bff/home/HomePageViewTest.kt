@@ -8,16 +8,18 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class HomePageViewTest {
+    private val books =
+        object : BookManager {
+            override fun getBooks() =
+                listOf(
+                    Book("Bilbo", BookKind.FANTASY, BookFormat.E_BOOK, 1_000),
+                    Book("Dune", BookKind.SF, BookFormat.E_BOOK, 1_000),
+                    Book("Hyperion", BookKind.SF, BookFormat.E_BOOK, 1_000),
+                    Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 1_000),
+                )
 
-    private val books = object : BookManager {
-        override fun getBooks() = listOf(
-            Book("Bilbo", BookKind.FANTASY, BookFormat.E_BOOK, 1_000),
-            Book("Dune", BookKind.SF, BookFormat.E_BOOK, 1_000),
-            Book("Hyperion", BookKind.SF, BookFormat.E_BOOK, 1_000),
-            Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 1_000),
-        )
-        override fun createBook(book: Book) = book
-    }
+            override fun createBook(book: Book) = book
+        }
 
     @Test
     fun `summarises the catalog for the home page`() {
