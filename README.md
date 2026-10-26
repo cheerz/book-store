@@ -92,6 +92,8 @@ BASE_URL=http://localhost:8080/api ./gradlew :book-store-ti:integrationTest
 
 Variables : `BASE_URL` (défaut `http://localhost:8080/api`), `READINESS_TIMEOUT_SECONDS` (défaut `60`).
 
+Scénarios : `SmokeIT` (l'application répond), `AddBookIT` (ajout d'un livre et refus), `PagesIT` (contenu des pages).
+
 ### 3. Smoke test post-déploiement
 
 Joué par la CI après chaque déploiement sur `master` : appel de `/api/health` sur le
@@ -128,7 +130,7 @@ Chaque domaine est un package (`catalog`, `pricing`) organisé ainsi :
 | `domain/` | Port inbound : ce que l'extérieur peut demander au domaine | `BookManager` |
 | `domain/` | Implémentation du port inbound | `BookManagerImpl` |
 | `domain/` | Port outbound : ce dont le domaine a besoin | `BookRepository` |
-| `domain/` | Exceptions métier nommées | `InvalidBookKindException` |
+| `domain/` | Exceptions métier nommées | `InvalidBookTitleException` |
 | `adapter/outbound/` | Implémentation des ports outbound, avec ses entités JPA | `JpaBookRepository`, `BookEntity` |
 
 C'est « simplifié » par rapport à un hexagonal complet :
@@ -138,7 +140,7 @@ C'est « simplifié » par rapport à un hexagonal complet :
 
 On garde l'essentiel : le domaine ne dépend d'aucun adapter, et tout passe par des interfaces. Un adapter se remplace sans toucher au domaine, et le domaine se teste avec des fakes.
 
-### BFF : adapter inbound et orchestrateur
+### BFF : adapter inbound, orchestrateur et formateur
 
 Le package `bff/` est l'adapter inbound de l'application : c'est le seul point d'entrée des fronts.
 Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à part, dans `web/`.
@@ -146,8 +148,9 @@ Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à p
 - **Un contrôleur par page** : `/pages/home`, `/pages/catalog`. Chaque contrôleur (`HomePageController`, `CatalogPageController`) renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
 - **Orchestrateur** : un contrôleur peut appeler plusieurs domaines. `CatalogPageController` combine `catalog` (les livres) et `pricing` (le prix de chaque format).
 - **Traduction typée entre domaines** : `catalog` parle de `BookFormat`, `pricing` de `ProductType`. Le BFF passe de l'un à l'autre avec un `when` exhaustif : un format ajouté sans son type de produit ne compile pas. Côté `pricing`, les prix sont en base : un type de produit ajouté sans son prix dans `data.sql` fait échouer `JpaPriceRepositoryTest`.
+- **Libellés** : le BFF traduit les libellés des fronts (`"e-book"`, `"sf"`) vers les enums du domaine et inversement (`bff/BookLabels.kt`), après normalisation des espaces et de la casse. Un libellé inconnu lève `InvalidBookKindException` ou `InvalidBookFormatException` (422). Le domaine ne connaît que ses enums.
 - **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par un nouveau contrôleur, sans modifier les endpoints ni les domaines existants.
-- **Pas de règle métier dans le BFF** : il agrège, mappe et met en forme. Les règles restent dans les domaines.
+- **Orchestrateur et formateur pour les fronts** : le BFF orchestre les appels aux domaines et met leurs réponses en forme pour la page qui les affiche : agrégation, mapping, choix de ce qui est montré (par exemple les trois derniers ajouts de la page d'accueil).
 
 ### Adapter inbound par domaine : optionnel
 
@@ -173,13 +176,15 @@ Si un domaine doit un jour se passer de Spring (librairie partagée, autre runti
 ### Erreurs
 
 - Les domaines lèvent des exceptions métier nommées.
-- `web/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `CBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "statusCode", "errorCode", "userMessage", "developerSummary", "developerMessage", "requestId" } }`.
+- `web/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `BBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "statusCode", "errorCode", "userMessage", "developerSummary", "developerMessage", "requestId" } }`.
 - `userMessage` est le seul texte destiné à l'utilisateur final : c'est lui que le front affiche. Les champs `developer*` restent pour le debug.
 - `developerMessage` ne contient que des messages écrits dans ce code : celui de l'exception métier, ou la liste des champs invalides. Les messages de Spring et de Jackson ne partent jamais au client, car ils contiennent des noms de classes internes.
-- Les erreurs du framework gardent leur statut : route inconnue → `CBE-7` (404), méthode non supportée → `CBE-12` (405).
-- Une exception non mappée devient `CBE-0` (500), sans exposer son message.
+- 400 = forme de la requête : champ absent ou vide, vérifié par `@Valid` sur le DTO → `BBE-1`. 422 = règle métier : levée par le domaine (titre de 1 à 255 caractères, prix positif) ou par le BFF (genre ou format inconnu).
+- Les erreurs du framework gardent leur statut HTTP : route inconnue → `BBE-7` (404), méthode non supportée → `BBE-12` (405), `Content-Type` non supporté → `BBE-13` (415). Les autres gardent leur statut avec le code générique `BBE-1`.
+- Une erreur de configuration a son propre code : un type de produit sans prix → `BBE-14` (500).
+- Une exception non mappée devient `BBE-0` (500). Aucun 5xx n'expose son message.
 
-Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `CbeError` (avec son `userMessage`), un cas dans `ErrorHandlingAdvice.cbeFor`.
+Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `BbeError` (avec son `userMessage`), un cas dans `ErrorHandlingAdvice.bbeFor`.
 
 ### Logs et request id
 
@@ -212,7 +217,7 @@ En production, la base embarquée a donc les mêmes limites que l'ancien stockag
 
 | Couche | Ce qui est testé | Comment |
 |---|---|---|
-| Unitaires (`book-store`) | Règles du domaine, mapping et orchestration du BFF, traduction des erreurs | Fakes écrits à la main sur les ports, sans librairie de mock ; seul `contextLoads` démarre Spring |
+| Unitaires (`book-store`) | Règles du domaine, mapping et orchestration du BFF, traduction des erreurs | Fakes écrits à la main sur les ports, sans librairie de mock ; seuls `contextLoads` et la validation HTTP (`@WebMvcTest`) démarrent Spring |
 | Adapters JPA (`book-store`) | Les adapters outbound contre le vrai schéma et les données de départ | `@DataJpaTest` : base HSQLDB en mémoire, tables créées par Hibernate, `data.sql` joué |
 | Intégration (`book-store-ti`) | Le contrat HTTP de l'application déployée | Module séparé, sans dépendance vers `book-store` : un client Feign contre `BASE_URL` |
 | Smoke post-déploiement | L'application déployée répond | `curl` sur `/api/health` en CI |

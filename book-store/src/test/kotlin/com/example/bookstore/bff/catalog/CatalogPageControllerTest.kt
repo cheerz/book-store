@@ -1,11 +1,11 @@
 package com.example.bookstore.bff.catalog
 
+import com.example.bookstore.bff.InvalidBookFormatException
+import com.example.bookstore.bff.InvalidBookKindException
 import com.example.bookstore.catalog.domain.Book
 import com.example.bookstore.catalog.domain.BookFormat
 import com.example.bookstore.catalog.domain.BookKind
 import com.example.bookstore.catalog.domain.BookManager
-import com.example.bookstore.catalog.domain.InvalidBookFormatException
-import com.example.bookstore.catalog.domain.InvalidBookKindException
 import com.example.bookstore.pricing.domain.Price
 import com.example.bookstore.pricing.domain.PriceManager
 import com.example.bookstore.pricing.domain.PriceQuote

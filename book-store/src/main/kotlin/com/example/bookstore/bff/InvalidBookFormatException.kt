@@ -1,4 +1,6 @@
-package com.example.bookstore.catalog.domain
+package com.example.bookstore.bff
+
+import com.example.bookstore.catalog.domain.BookFormat
 
 class InvalidBookFormatException(
     val receivedFormat: String,

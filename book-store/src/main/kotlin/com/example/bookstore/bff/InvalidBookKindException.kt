@@ -1,4 +1,6 @@
-package com.example.bookstore.catalog.domain
+package com.example.bookstore.bff
+
+import com.example.bookstore.catalog.domain.BookKind
 
 class InvalidBookKindException(
     val receivedKind: String,

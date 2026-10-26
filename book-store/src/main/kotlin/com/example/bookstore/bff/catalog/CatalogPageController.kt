@@ -1,8 +1,10 @@
 package com.example.bookstore.bff.catalog
 
+import com.example.bookstore.bff.bookFormatOf
+import com.example.bookstore.bff.bookKindOf
+import com.example.bookstore.bff.label
 import com.example.bookstore.catalog.domain.Book
 import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookKind
 import com.example.bookstore.catalog.domain.BookManager
 import com.example.bookstore.pricing.domain.PriceManager
 import com.example.bookstore.pricing.domain.ProductType
@@ -63,9 +65,9 @@ class CatalogPageController(
 
     private fun toBook(request: AddBookRequestDto): Book =
         Book(
-            title = request.title,
-            kind = BookKind.fromLabel(request.kind),
-            format = BookFormat.fromLabel(request.format),
+            title = checkNotNull(request.title),
+            kind = bookKindOf(checkNotNull(request.kind)),
+            format = bookFormatOf(checkNotNull(request.format)),
             priceInCents = checkNotNull(request.bookPriceInCents),
         )
 }

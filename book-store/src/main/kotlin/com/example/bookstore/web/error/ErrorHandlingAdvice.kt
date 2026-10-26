@@ -1,9 +1,11 @@
 package com.example.bookstore.web.error
 
-import com.example.bookstore.catalog.domain.InvalidBookFormatException
-import com.example.bookstore.catalog.domain.InvalidBookKindException
+import com.example.bookstore.bff.InvalidBookFormatException
+import com.example.bookstore.bff.InvalidBookKindException
 import com.example.bookstore.catalog.domain.InvalidBookPriceException
+import com.example.bookstore.catalog.domain.InvalidBookTitleException
 import com.example.bookstore.pricing.domain.InvalidPriceException
+import com.example.bookstore.pricing.domain.MissingProductPriceException
 import com.example.bookstore.web.observability.RequestIdFilter
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -19,49 +21,58 @@ import org.springframework.web.bind.annotation.RestControllerAdvice
 class ErrorHandlingAdvice {
     @ExceptionHandler(Exception::class)
     fun handleExceptions(exception: Exception): ResponseEntity<ErrorEnvelopeDto> {
-        val cbe = cbeFor(exception)
-        log(cbe, exception)
+        val bbe = bbeFor(exception)
+        val status = httpStatusFor(exception, bbe)
+        log(bbe, exception)
 
-        return ResponseEntity.status(cbe.httpStatus).body(
+        return ResponseEntity.status(status).body(
             ErrorEnvelopeDto(
                 ErrorResponseDto(
-                    statusCode = cbe.httpStatus,
-                    errorCode = cbe.code,
-                    userMessage = cbe.userMessage,
-                    developerSummary = cbe.summary,
-                    developerMessage = developerMessageFor(exception, cbe),
+                    statusCode = status,
+                    errorCode = bbe.code,
+                    userMessage = bbe.userMessage,
+                    developerSummary = bbe.summary,
+                    developerMessage = developerMessageFor(exception, bbe),
                     requestId = MDC.get(RequestIdFilter.MDC_KEY),
                 ),
             ),
         )
     }
 
-    private fun cbeFor(exception: Exception): CbeError =
+    private fun bbeFor(exception: Exception): BbeError =
         when (exception) {
-            is InvalidBookKindException -> CbeError.UNSUPPORTED_BOOK_KIND
-            is InvalidBookFormatException -> CbeError.INVALID_BOOK_DEFINITION
-            is InvalidBookPriceException, is InvalidPriceException -> CbeError.INVALID_PRICE_DEFINITION
-            is HttpMessageNotReadableException -> CbeError.BAD_REQUEST
-            is ErrorResponse -> cbeForStatus(exception.statusCode)
-            else -> CbeError.SERVER_ERROR
+            is InvalidBookKindException -> BbeError.UNSUPPORTED_BOOK_KIND
+            is InvalidBookFormatException -> BbeError.INVALID_BOOK_DEFINITION
+            is InvalidBookTitleException -> BbeError.INVALID_BOOK_TITLE
+            is InvalidBookPriceException, is InvalidPriceException -> BbeError.INVALID_PRICE_DEFINITION
+            is MissingProductPriceException -> BbeError.MISSING_PRODUCT_PRICE
+            is HttpMessageNotReadableException -> BbeError.BAD_REQUEST
+            is ErrorResponse -> bbeForStatus(exception.statusCode)
+            else -> BbeError.SERVER_ERROR
         }
 
-    private fun cbeForStatus(status: HttpStatusCode): CbeError =
+    private fun bbeForStatus(status: HttpStatusCode): BbeError =
         when {
-            status.value() == 404 -> CbeError.NOT_FOUND
-            status.value() == 405 -> CbeError.METHOD_NOT_ALLOWED
-            status.is5xxServerError -> CbeError.SERVER_ERROR
-            else -> CbeError.BAD_REQUEST
+            status.value() == 404 -> BbeError.NOT_FOUND
+            status.value() == 405 -> BbeError.METHOD_NOT_ALLOWED
+            status.value() == 415 -> BbeError.UNSUPPORTED_MEDIA_TYPE
+            status.is5xxServerError -> BbeError.SERVER_ERROR
+            else -> BbeError.BAD_REQUEST
         }
+
+    private fun httpStatusFor(
+        exception: Exception,
+        bbe: BbeError,
+    ): Int = (exception as? ErrorResponse)?.statusCode?.value() ?: bbe.httpStatus
 
     private fun developerMessageFor(
         exception: Exception,
-        cbe: CbeError,
+        bbe: BbeError,
     ): String? =
         when {
             exception is MethodArgumentNotValidException -> invalidFieldsOf(exception)
             exception is ErrorResponse || exception is HttpMessageNotReadableException -> null
-            cbe == CbeError.SERVER_ERROR -> null
+            bbe.isServerError -> null
             else -> exception.message
         }
 
@@ -69,14 +80,14 @@ class ErrorHandlingAdvice {
         exception.bindingResult.fieldErrors.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
 
     private fun log(
-        cbe: CbeError,
+        bbe: BbeError,
         exception: Exception,
     ) {
-        if (cbe == CbeError.SERVER_ERROR) {
-            logger.error("${cbe.code} unexpected error", exception)
+        if (bbe.isServerError) {
+            logger.error("${bbe.code} ${bbe.summary}", exception)
             return
         }
-        logger.warn("{} {}", cbe.code, exception::class.simpleName)
+        logger.warn("{} {}", bbe.code, exception::class.simpleName)
     }
 
     private companion object {

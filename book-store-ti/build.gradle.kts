@@ -9,8 +9,8 @@ java {
 }
 
 dependencies {
-    testImplementation(platform("com.fasterxml.jackson:jackson-bom:2.20.0"))
-    testImplementation(platform("org.junit:junit-bom:5.14.0"))
+    // Same BOM as the application: JUnit and Jackson follow its versions, without a dependency on its code.
+    testImplementation(platform(org.springframework.boot.gradle.plugin.SpringBootPlugin.BOM_COORDINATES))
 
     testImplementation("io.github.openfeign:feign-core:13.6")
     testImplementation("io.github.openfeign:feign-jackson:13.6")
@@ -34,8 +34,6 @@ tasks.register<Test>("integrationTest") {
             .output.classesDirs
     classpath = sourceSets.test.get().runtimeClasspath
     useJUnitPlatform()
-
-    systemProperty("base.url", System.getenv("BASE_URL") ?: "http://localhost:8080/api")
 
     outputs.upToDateWhen { false }
 
