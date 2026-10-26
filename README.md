@@ -215,14 +215,19 @@ Où vivent les données :
 
 #### Brancher la production sur Postgres
 
-Variables d'environnement du container de production :
+Le job `deploy` de la CI pose tout l'environnement du container de production à chaque déploiement :
 
-| Variable | Valeur |
-|---|---|
-| `SPRING_PROFILES_ACTIVE` | `postgres` |
-| `DATABASE_URL` | `jdbc:postgresql://<host>:<port>/<base>?sslmode=require` |
-| `DATABASE_USERNAME` | utilisateur de la base |
-| `DATABASE_PASSWORD` | mot de passe, en variable **secrète** Scaleway |
+| Variable du container | Type Scaleway | Source |
+|---|---|---|
+| `JAVA_TOOL_OPTIONS` | variable | `-XX:MaxRAMPercentage=75`, en dur dans `ci.yml` |
+| `SPRING_PROFILES_ACTIVE` | variable | `postgres`, en dur dans `ci.yml` |
+| `DATABASE_URL` | secrète | secret GitHub `DATABASE_URL` : `jdbc:postgresql://<host>:<port>/<base>?sslmode=require` |
+| `DATABASE_USERNAME` | secrète | secret GitHub `DATABASE_USERNAME` |
+| `DATABASE_PASSWORD` | secrète | secret GitHub `DATABASE_PASSWORD` |
+
+- Les trois secrets GitHub se déclarent sur l'environnement `production` (ou sur le repo).
+- La CI est la seule source de l'environnement de production : `scw container container update` remplace les variables en entier, donc une variable ajoutée à la main dans la console Scaleway disparaît au déploiement suivant. Une nouvelle variable s'ajoute dans `ci.yml`.
+- Un secret GitHub absent arrête le job avant toute modification du container (étape `Check database secrets`).
 
 Le profil n'a aucune valeur par défaut : une variable absente fait échouer le démarrage, puis le smoke test du déploiement, au lieu de retomber sur HSQLDB. Une `DATABASE_URL` absente apparaît dans les logs comme `'url' must start with "jdbc"`.
 

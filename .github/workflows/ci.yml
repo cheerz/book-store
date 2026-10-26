@@ -197,10 +197,34 @@ jobs:
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
 
+      - name: Check database secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+        run: |
+          for name in DATABASE_URL DATABASE_USERNAME DATABASE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret GitHub $name absent : le container de production ne démarrerait pas."
+              exit 1
+            fi
+          done
+
+      # The update sends each environment map whole: this step owns the full env of the
+      # production container, and a variable added in the Scaleway console is erased here.
       - name: Deploy serverless container
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
         run: |
           scw container container update ${{ secrets.SCW_CONTAINER_ID }} \
             image=${{ env.IMAGE }}:sha-${{ github.sha }} \
+            environment-variables.JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75" \
+            environment-variables.SPRING_PROFILES_ACTIVE=postgres \
+            secret-environment-variables.DATABASE_URL="$DATABASE_URL" \
+            secret-environment-variables.DATABASE_USERNAME="$DATABASE_USERNAME" \
+            secret-environment-variables.DATABASE_PASSWORD="$DATABASE_PASSWORD" \
             region=${{ env.SCW_REGION }}
           scw container container deploy ${{ secrets.SCW_CONTAINER_ID }} \
             region=${{ env.SCW_REGION }}
