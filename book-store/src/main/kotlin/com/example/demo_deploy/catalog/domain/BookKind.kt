@@ -1,14 +1,16 @@
 package com.example.demo_deploy.catalog.domain
 
-enum class BookKind {
-    FANTASY,
-    SF,
-    THRILLER,
+enum class BookKind(
+    val label: String,
+) {
+    FANTASY("fantasy"),
+    SF("sf"),
+    THRILLER("thriller"),
     ;
 
     companion object {
         fun fromLabel(label: String): BookKind =
-            entries.find { it.name == label.trim().uppercase() }
+            entries.find { it.label == label.trim().lowercase() }
                 ?: throw InvalidBookKindException(label)
     }
 }

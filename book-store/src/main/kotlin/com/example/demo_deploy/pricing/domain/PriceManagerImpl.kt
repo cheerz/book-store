@@ -8,7 +8,7 @@ class PriceManagerImpl(
 ) : PriceManager {
     override fun quote(
         basePriceInCents: Long,
-        productType: String,
+        productType: ProductType,
     ): PriceQuote {
         val base = Price(basePriceInCents)
         val surcharge = surchargeFor(productType)
@@ -16,7 +16,7 @@ class PriceManagerImpl(
         return PriceQuote(base = base, surcharge = surcharge, total = base + surcharge)
     }
 
-    private fun surchargeFor(productType: String): Price =
-        priceRepository.findByProductType(productType.trim().uppercase())
+    override fun surchargeFor(productType: ProductType): Price =
+        priceRepository.findByProductType(productType)
             ?: throw UnknownProductTypeException(productType)
 }

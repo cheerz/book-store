@@ -9,6 +9,7 @@ import com.example.demo_deploy.catalog.domain.InvalidBookKindException
 import com.example.demo_deploy.pricing.domain.Price
 import com.example.demo_deploy.pricing.domain.PriceManager
 import com.example.demo_deploy.pricing.domain.PriceQuote
+import com.example.demo_deploy.pricing.domain.ProductType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -31,17 +32,18 @@ class CatalogPageViewTest {
         object : PriceManager {
             override fun quote(
                 basePriceInCents: Long,
-                productType: String,
+                productType: ProductType,
             ): PriceQuote {
-                val surcharge =
-                    when (productType) {
-                        "HARDCOVER" -> Price(1_000)
-                        "POCKET" -> Price(750)
-                        "E_BOOK" -> Price(500)
-                        else -> error("unexpected $productType")
-                    }
+                val surcharge = surchargeFor(productType)
                 return PriceQuote(Price(basePriceInCents), surcharge, Price(basePriceInCents) + surcharge)
             }
+
+            override fun surchargeFor(productType: ProductType): Price =
+                when (productType) {
+                    ProductType.HARDCOVER -> Price(1_000)
+                    ProductType.POCKET -> Price(750)
+                    ProductType.E_BOOK -> Price(500)
+                }
         }
 
     private val view = CatalogPageView(books, prices)

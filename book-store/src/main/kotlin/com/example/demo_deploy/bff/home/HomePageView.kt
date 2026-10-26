@@ -20,7 +20,7 @@ class HomePageView(
                 books
                     .groupingBy { it.kind }
                     .eachCount()
-                    .map { (kind, count) -> KindTile(kind.name.lowercase(), count) }
+                    .map { (kind, count) -> KindTile(kind.label, count) }
                     .sortedBy { it.kind },
             latestTitles = books.takeLast(LATEST_COUNT).reversed().map { it.title },
         )

@@ -1,32 +1,36 @@
 package com.example.demo_deploy.bff.error
 
+import com.example.demo_deploy.bff.observability.RequestIdFilter
 import com.example.demo_deploy.catalog.domain.InvalidBookFormatException
 import com.example.demo_deploy.catalog.domain.InvalidBookKindException
 import com.example.demo_deploy.catalog.domain.InvalidBookPriceException
 import com.example.demo_deploy.pricing.domain.InvalidPriceException
+import org.slf4j.LoggerFactory
+import org.slf4j.MDC
+import org.springframework.http.HttpStatusCode
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
 import org.springframework.web.ErrorResponse
+import org.springframework.web.bind.MethodArgumentNotValidException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
-import java.util.UUID
 
 @RestControllerAdvice
 class ErrorHandlingAdvice {
     @ExceptionHandler(Exception::class)
     fun handleExceptions(exception: Exception): ResponseEntity<ErrorEnvelopeDto> {
         val cbe = cbeFor(exception)
-        notifyBugsnag(exception)
+        log(cbe, exception)
 
         return ResponseEntity.status(cbe.httpStatus).body(
             ErrorEnvelopeDto(
                 ErrorResponseDto(
                     statusCode = cbe.httpStatus,
                     errorCode = cbe.code,
-                    userMessage = null,
+                    userMessage = cbe.userMessage,
                     developerSummary = cbe.summary,
-                    developerMessage = exception.message.takeUnless { cbe == CbeError.SERVER_ERROR },
-                    requestId = UUID.randomUUID().toString(),
+                    developerMessage = developerMessageFor(exception, cbe),
+                    requestId = MDC.get(RequestIdFilter.MDC_KEY),
                 ),
             ),
         )
@@ -37,11 +41,49 @@ class ErrorHandlingAdvice {
             is InvalidBookKindException -> CbeError.UNSUPPORTED_BOOK_KIND
             is InvalidBookFormatException -> CbeError.INVALID_BOOK_DEFINITION
             is InvalidBookPriceException, is InvalidPriceException -> CbeError.INVALID_PRICE_DEFINITION
-            is ErrorResponse, is HttpMessageNotReadableException -> CbeError.BAD_REQUEST
+            is HttpMessageNotReadableException -> CbeError.BAD_REQUEST
+            is ErrorResponse -> cbeForStatus(exception.statusCode)
             else -> CbeError.SERVER_ERROR
         }
 
-    private fun notifyBugsnag(exception: Exception) {
-        // Notify Bugsnag
+    private fun cbeForStatus(status: HttpStatusCode): CbeError =
+        when {
+            status.value() == 404 -> CbeError.NOT_FOUND
+            status.value() == 405 -> CbeError.METHOD_NOT_ALLOWED
+            status.is5xxServerError -> CbeError.SERVER_ERROR
+            else -> CbeError.BAD_REQUEST
+        }
+
+    // Seuls les messages écrits dans ce code partent au client : ceux de Spring et
+    // de Jackson contiennent des noms de classes et de packages internes.
+    private fun developerMessageFor(
+        exception: Exception,
+        cbe: CbeError,
+    ): String? =
+        when {
+            exception is MethodArgumentNotValidException -> invalidFieldsOf(exception)
+            exception is ErrorResponse || exception is HttpMessageNotReadableException -> null
+            cbe == CbeError.SERVER_ERROR -> null
+            else -> exception.message
+        }
+
+    private fun invalidFieldsOf(exception: MethodArgumentNotValidException): String =
+        exception.bindingResult.fieldErrors.joinToString("; ") { "${it.field}: ${it.defaultMessage}" }
+
+    // Une erreur client ne loggue que son code et sa classe : son message reprend
+    // la saisie de l'utilisateur, qui pourrait injecter de fausses lignes de log.
+    private fun log(
+        cbe: CbeError,
+        exception: Exception,
+    ) {
+        if (cbe == CbeError.SERVER_ERROR) {
+            logger.error("${cbe.code} unexpected error", exception)
+            return
+        }
+        logger.warn("{} {}", cbe.code, exception::class.simpleName)
+    }
+
+    private companion object {
+        val logger = LoggerFactory.getLogger(ErrorHandlingAdvice::class.java)
     }
 }

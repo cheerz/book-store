@@ -11,8 +11,8 @@ data class ErrorEnvelopeDto(
 data class ErrorResponseDto(
     @JsonProperty("status_code") val statusCode: Int,
     @JsonProperty("error_code") val errorCode: String,
-    @JsonProperty("user_message") val userMessage: String?,
+    @JsonProperty("user_message") val userMessage: String,
     @JsonProperty("developer_summary") val developerSummary: String,
     @JsonProperty("developer_message") val developerMessage: String?,
-    @JsonProperty("request_id") val requestId: String,
+    @JsonProperty("request_id") val requestId: String?,
 )

@@ -5,6 +5,7 @@ import com.example.demo_deploy.catalog.domain.BookFormat
 import com.example.demo_deploy.catalog.domain.BookKind
 import com.example.demo_deploy.catalog.domain.BookManager
 import com.example.demo_deploy.pricing.domain.PriceManager
+import com.example.demo_deploy.pricing.domain.ProductType
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -34,11 +35,11 @@ class CatalogPageView(
     }
 
     private fun toItem(book: Book): CatalogPageItem {
-        val quote = priceManager.quote(basePriceInCents = book.priceInCents, productType = book.format.name)
+        val quote = priceManager.quote(basePriceInCents = book.priceInCents, productType = book.format.toProductType())
 
         return CatalogPageItem(
             title = book.title,
-            kind = book.kind.name.lowercase(),
+            kind = book.kind.label,
             format = book.format.label,
             bookPriceInCents = quote.base.amountInCents,
             formatPriceInCents = quote.surcharge.amountInCents,
@@ -46,11 +47,20 @@ class CatalogPageView(
         )
     }
 
-    private fun toFormatOption(format: BookFormat): FormatOption {
-        val quote = priceManager.quote(basePriceInCents = 0, productType = format.name)
+    private fun toFormatOption(format: BookFormat): FormatOption =
+        FormatOption(
+            format = format.label,
+            priceInCents = priceManager.surchargeFor(format.toProductType()).amountInCents,
+        )
 
-        return FormatOption(format = format.label, priceInCents = quote.surcharge.amountInCents)
-    }
+    // Seul point de contact entre catalog et pricing. when exhaustif volontaire :
+    // un BookFormat ajouté sans ProductType ne compile pas. Ne pas remplacer par valueOf(name).
+    private fun BookFormat.toProductType(): ProductType =
+        when (this) {
+            BookFormat.E_BOOK -> ProductType.E_BOOK
+            BookFormat.POCKET -> ProductType.POCKET
+            BookFormat.HARDCOVER -> ProductType.HARDCOVER
+        }
 
     private fun toBook(request: AddBookRequestDto): Book =
         Book(

@@ -7,6 +7,12 @@ server:
   servlet:
     context-path: "/api"
 
+logging:
+  pattern:
+    # Prefixes every log line with the request id set by RequestIdFilter,
+    # the same id the client receives in X-Request-Id and in error responses.
+    level: "%5p [%X{requestId:-}]"
+
 management:
   endpoints:
     web:

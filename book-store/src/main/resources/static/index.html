@@ -200,10 +200,12 @@
       return body;
     }
 
+    // The developer fields stay in the console: user_message is the only text meant for the end user.
     function showError(error) {
-      const lines = error?.error_code
-        ? [`${error.error_code} — ${error.developer_summary}`, error.developer_message]
-        : [String(error)];
+      console.error(error);
+      const lines = error?.user_message
+        ? [error.user_message, error.request_id && `Référence : ${error.request_id}`]
+        : ["Le service ne répond pas, réessaie dans quelques instants."];
       document.getElementById("error").textContent = lines.filter(Boolean).join("\n");
     }
 
