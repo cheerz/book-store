@@ -44,5 +44,10 @@ Thumbs.db
 ### Logs ###
 *.log
 
+### Base HSQLDB locale (bootRun) ###
+# Ancré, comme /out/ et /bin/ : un package `data` dans les sources resterait suivi.
+/data/
+/book-store/data/
+
 ### Spring Initializr ###
 /HELP.md

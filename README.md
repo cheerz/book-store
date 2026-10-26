@@ -110,7 +110,7 @@ front ──HTTP──▶ bff/                     adapter inbound + orchestrate
        │                    │  ports outbound (BookRepository, PriceRepository)
        ▼                    ▼
  catalog/adapter/      pricing/adapter/
-   outbound/             outbound/       implémentations (en mémoire)
+   outbound/             outbound/       implémentations JPA (HSQLDB)
 ```
 
 Deux règles structurent le code :
@@ -129,7 +129,7 @@ Chaque domaine est un package (`catalog`, `pricing`) organisé ainsi :
 | `domain/` | Implémentation du port inbound | `BookManagerImpl` |
 | `domain/` | Port outbound : ce dont le domaine a besoin | `BookRepository` |
 | `domain/` | Exceptions métier nommées | `InvalidBookKindException` |
-| `adapter/outbound/` | Implémentation des ports outbound | `InMemoryBookRepository` |
+| `adapter/outbound/` | Implémentation des ports outbound, avec ses entités JPA | `JpaBookRepository`, `BookEntity` |
 
 C'est « simplifié » par rapport à un hexagonal complet :
 
@@ -144,7 +144,7 @@ Le package `bff/` est l'adapter inbound de l'application : c'est le seul point d
 
 - **Une vue par page** : `/pages/home`, `/pages/catalog`. Chaque vue renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
 - **Orchestrateur** : une vue peut appeler plusieurs domaines. `CatalogPageView` combine `catalog` (les livres) et `pricing` (le prix de chaque format).
-- **Traduction typée entre domaines** : `catalog` parle de `BookFormat`, `pricing` de `ProductType`. Le BFF passe de l'un à l'autre avec un `when` exhaustif : un format ajouté sans son type de produit ne compile pas. Côté `pricing`, l'adapter en mémoire est lui aussi un `when` exhaustif : un type de produit ajouté sans prix ne compile pas.
+- **Traduction typée entre domaines** : `catalog` parle de `BookFormat`, `pricing` de `ProductType`. Le BFF passe de l'un à l'autre avec un `when` exhaustif : un format ajouté sans son type de produit ne compile pas. Côté `pricing`, les prix sont en base : un type de produit ajouté sans son prix dans `data.sql` fait échouer `JpaPriceRepositoryTest`.
 - **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par une nouvelle vue, sans modifier les endpoints ni les domaines existants.
 - **Pas de règle métier dans le BFF** : il agrège, mappe et met en forme. Les règles restent dans les domaines.
 
@@ -186,15 +186,33 @@ Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `CbeE
 - Le front affiche cet id comme « Référence » sous un message d'erreur : un utilisateur peut le transmettre, et on retrouve la requête dans les logs.
 - Un 5xx est loggué en `ERROR` avec sa stack trace. Une erreur client est logguée en `WARN` avec son code et sa classe seulement : son message reprend la saisie de l'utilisateur, qui pourrait injecter de fausses lignes de log.
 
-### Persistance en mémoire
+### Persistance : JPA sur HSQLDB embarquée
 
-Les adapters outbound gardent les données en mémoire : le template n'embarque pas de base. Les données sont perdues au redémarrage et ne sont pas partagées entre instances. Brancher une vraie base consiste à écrire un nouvel adapter qui implémente le même port outbound.
+- **Base** : HSQLDB embarquée dans l'application, stockée en fichiers dans `./data` (relatif au répertoire de lancement). Aucun serveur de base à installer ni à déployer.
+- **Pourquoi pas H2** : H2 est sous MPL 2.0 / EPL 1.0, hors des licences autorisées (MIT, Apache 2.0, BSD). HSQLDB est sous licence BSD.
+- **Schéma** : Hibernate le crée et le complète à partir des entités (`ddl-auto: update`). Pas d'outil de migration, pour rester simple. Limite : `update` ajoute les tables et les colonnes manquantes, mais ne supprime, ne renomme et ne modifie jamais rien. Renommer un champ laisse l'ancienne colonne en place.
+- **Données de départ** : `src/main/resources/data.sql`, joué à chaque démarrage après Hibernate. Chaque requête n'insère que ce qui manque : les prix absents, et les livres de départ seulement si le catalogue est vide. Un redémarrage ne crée donc pas de doublon.
+- **Enums stockés en `String`** : `BookEntity.kind`, `BookEntity.format` et `ProductPriceEntity.productType` sont des `String`, convertis vers l'enum dans l'adapter. Avec `@Enumerated`, Hibernate pose un `check (kind in (...))` que `update` ne met jamais à jour : une valeur ajoutée à l'enum serait refusée par la base.
+- **Hexagonal** : les entités JPA (`BookEntity`, `ProductPriceEntity`) et les interfaces Spring Data restent dans `adapter/outbound/`. Le domaine ne connaît que ses ports et ses objets (`Book`, `Price`). L'adapter fait la conversion dans les deux sens.
+- **Ordre** : `JpaBookRepository.findAll()` trie par id, c'est-à-dire par ordre d'ajout. La page d'accueil en tire ses « derniers ajouts ».
+
+Où vivent les données :
+
+| Environnement | Emplacement | Durée de vie |
+|---|---|---|
+| `./gradlew :book-store:bootRun` | `book-store/data/` (ignoré par Git) | Jusqu'à suppression du répertoire |
+| `docker compose` | Volume `book-store-data` | Survit à un redémarrage ; `docker compose down -v` remet à zéro |
+| Tests (`@DataJpaTest`, `contextLoads`) | Base en mémoire, tables créées par Hibernate, `data.sql` joué | Le temps du test |
+| Scaleway | Système de fichiers du container | **Perdues à chaque redéploiement ou redémarrage, et propres à chaque instance** |
+
+En production, la base embarquée a donc les mêmes limites que l'ancien stockage en mémoire, avec une vraie base relationnelle en plus. Passer à une base managée (Postgres par exemple) demande d'ajouter le driver, de configurer `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` et `SPRING_DATASOURCE_PASSWORD`, et de vérifier `data.sql` sur ce moteur (`MERGE` et `VALUES` varient selon les bases). Le domaine et les adapters ne changent pas. C'est aussi le moment de remplacer `ddl-auto: update` par un outil de migration.
 
 ### Tests
 
 | Couche | Ce qui est testé | Comment |
 |---|---|---|
 | Unitaires (`book-store`) | Règles du domaine, mapping et orchestration du BFF, traduction des erreurs | Fakes écrits à la main sur les ports, sans librairie de mock ; seul `contextLoads` démarre Spring |
+| Adapters JPA (`book-store`) | Les adapters outbound contre le vrai schéma et les données de départ | `@DataJpaTest` : base HSQLDB en mémoire, tables créées par Hibernate, `data.sql` joué |
 | Intégration (`book-store-ti`) | Le contrat HTTP de l'application déployée | Module séparé, sans dépendance vers `book-store` : un client Feign contre `BASE_URL` |
 | Smoke post-déploiement | L'application déployée répond | `curl` sur `/api/health` en CI |
 
