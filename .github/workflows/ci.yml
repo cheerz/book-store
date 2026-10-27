@@ -316,5 +316,4 @@ jobs:
           gh pr comment "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
             --edit-last --create-if-none \
-            --body "🚀 Preview déployée : ${{ steps.deploy.outputs.public_endpoint }}
-          Health check : ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
+            --body "🚀 Health check : ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
