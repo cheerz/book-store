@@ -255,6 +255,8 @@ jobs:
     needs: push-to-scw-pr-preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Set up Scaleway CLI
@@ -304,3 +306,15 @@ jobs:
             --retry 12 --retry-delay 10 --retry-all-errors \
             "${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
           echo "Preview deployed: ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # --edit-last + --create-if-none : un seul commentaire mis à jour à
+      # chaque push, plutôt qu'un empilement d'un commentaire par déploiement.
+      - name: Comment preview URL on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --edit-last --create-if-none \
+            --body "🚀 Preview déployée : ${{ steps.deploy.outputs.public_endpoint }}
+          Health check : ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
