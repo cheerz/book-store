@@ -6,7 +6,7 @@ de production utilisé par le job `deploy` de `.github/workflows/ci.yml`.
 ## Contexte
 
 Le job `deploy` ne fait que mettre à jour un container existant
-(`scw container container update` + `scw container container deploy`) via
+(`scw container container update`, qui déclenche lui-même le redéploiement) via
 l'identifiant stocké dans le secret GitHub `SCW_CONTAINER_ID` (environnement
 `production`). Il ne crée jamais ce container : contrairement au job
 `deploy-pr-preview`, il n'y a pas de logique de création automatique pour la
@@ -75,23 +75,16 @@ scw container container create \
 
 Noter le `CONTAINER_ID` retourné (champ `id` du JSON de sortie).
 
-## 5. Déployer le container
+## 5. Vérifier manuellement le déploiement
 
 ```bash
-scw container container deploy CONTAINER_ID \
-  region=fr-par
+ENDPOINT=$(scw container container get CONTAINER_ID \
+  region=fr-par -o json | jq -r .public_endpoint)
+
+curl --fail --silent --show-error "${ENDPOINT}/api/health"
 ```
 
-## 6. Vérifier manuellement le déploiement
-
-```bash
-DOMAIN=$(scw container container get CONTAINER_ID \
-  region=fr-par -o json | jq -r .domain_name)
-
-curl --fail --silent --show-error "https://${DOMAIN}/api/health"
-```
-
-## 7. Enregistrer l'ID du container dans GitHub
+## 6. Enregistrer l'ID du container dans GitHub
 
 Le secret doit être créé dans l'environnement `production` du repo (celui
 référencé par `environment: production` dans le job `deploy`).
@@ -103,9 +96,9 @@ gh secret set SCW_CONTAINER_ID \
   --repo cheerz/book-store
 ```
 
-## 8. Relancer le déploiement
+## 7. Relancer le déploiement
 
-Si le job `deploy` avait échoué à l'étape 2 faute de secret, relancer le
+Si le job `deploy` avait échoué faute de secret (étape 6), relancer le
 workflow depuis GitHub Actions (re-run du job en échec) ou refaire un push
 sur `master`. Le job `deploy` doit désormais réussir et afficher l'URL
 déployée dans le résumé du run.
@@ -117,4 +110,4 @@ déployée dans le résumé du run.
   de la CI.
 - En cas de recréation du container (suppression accidentelle, changement de
   namespace, etc.), reprendre ce runbook depuis l'étape 3 et mettre à jour
-  le secret `SCW_CONTAINER_ID` à l'étape 7.
+  le secret `SCW_CONTAINER_ID` à l'étape 6.
