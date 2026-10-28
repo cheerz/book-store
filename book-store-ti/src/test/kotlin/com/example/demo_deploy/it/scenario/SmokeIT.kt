@@ -12,26 +12,46 @@ import kotlin.test.assertTrue
 class SmokeIT : IntegrationTest() {
 
     @Test
-    fun `the book catalogue is reachable`() {
-        assertTrue(bookApi.listBooks().isNotEmpty())
+    fun `the catalog page is reachable`() {
+        assertTrue(pages.catalogPage().books.isNotEmpty())
     }
 
     @Test
     fun `I can add a book to the Catalogue`() {
-        val created = bookApi.addBook(BookPayload(uniqueTitle("epee"), "Fantasy"))
-        assertEquals("fantasy", created.bookKind)
-        assertTrue(bookApi.listBooks().contains(created))
+        val title = uniqueTitle("epee")
+
+        val page = pages.addBook(BookPayload(title, "Fantasy"))
+
+        assertEquals("fantasy", page.books.single { it.title == title }.kind)
     }
 
     @Test
     fun `I can't add a romance book to the Catalogue`() {
-        val romance = BookPayload("Les feux de l'amour", "Romance")
+        val title = uniqueTitle("les-feux-de-l-amour")
 
-        val refused = assertFailsWith<FeignException.BadRequest> {
-            bookApi.addBook(romance)
+        assertRefusedWith("CBE-10", BookPayload(title, "Romance"))
+    }
+
+    @Test
+    fun `I can't add a book of an unknown size to the Catalogue`() {
+        val title = uniqueTitle("huge")
+
+        assertRefusedWith("CBE-8", BookPayload(title, "sf", "huge"))
+    }
+
+    @Test
+    fun `I can't add a book with a negative price to the Catalogue`() {
+        val title = uniqueTitle("negative")
+
+        assertRefusedWith("CBE-9", BookPayload(title, "sf", "small", -100))
+    }
+
+    private fun assertRefusedWith(errorCode: String, book: BookPayload) {
+        val refused = assertFailsWith<FeignException.UnprocessableEntity> {
+            pages.addBook(book)
         }
 
-        assertTrue(refused.contentUTF8().contains("INVALID_BOOK_KIND"))
-        assertFalse(bookApi.listBooks().any { it.title == romance.title })
+        assertTrue(refused.contentUTF8().contains("\"error_code\":\"$errorCode\""))
+        assertFalse(pages.catalogPage().books.any { it.title == book.title })
     }
 }
