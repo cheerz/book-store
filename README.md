@@ -46,7 +46,7 @@ curl localhost:8080/api/pages/catalog
 curl -H 'Content-Type: application/json' -d '{"title":"Dune","kind":"sf","format":"hardcover","bookPriceInCents":1200}' localhost:8080/api/pages/catalog/books
 ```
 
-Pour la lancer dans Docker, comme en production :
+Pour la lancer dans Docker, comme en production (avec un Postgres 17 à côté, profil `postgres`) :
 
 ```bash
 ./gradlew :book-store:bootJar
@@ -194,9 +194,10 @@ Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `BbeE
 - Le front affiche cet id comme « Référence » sous un message d'erreur : un utilisateur peut le transmettre, et on retrouve la requête dans les logs.
 - Un 5xx est loggué en `ERROR` avec sa stack trace. Une erreur client est logguée en `WARN` avec son code et sa classe seulement : son message reprend la saisie de l'utilisateur, qui pourrait injecter de fausses lignes de log.
 
-### Persistance : JPA, HSQLDB en local, Postgres sur Scaleway
+### Persistance : JPA, HSQLDB en `bootRun`, Postgres dans Docker et sur Scaleway
 
 - **Local** (par défaut) : HSQLDB embarquée dans l'application, stockée en fichiers dans `./data` (relatif au répertoire de lancement). Aucun serveur de base à installer.
+- **Docker** (`compose.yaml`, donc aussi les TI en local et en CI) : un service `db` en Postgres 17, et l'application en profil `postgres`. Les TI valident ainsi l'image sur le même moteur que la production.
 - **Scaleway** : profil Spring `postgres` (`application-postgres.yaml`), qui pointe la datasource vers une base Postgres managée.
 - **Pourquoi pas H2** : H2 est sous MPL 2.0 / EPL 1.0, hors des licences autorisées (MIT, Apache 2.0, BSD). HSQLDB et le driver Postgres sont sous licence BSD.
 - **Schéma** : Hibernate le crée et le complète à partir des entités (`ddl-auto: update`). Pas d'outil de migration, pour rester simple. Limite : `update` ajoute les tables et les colonnes manquantes, mais ne supprime, ne renomme et ne modifie jamais rien. Renommer un champ laisse l'ancienne colonne en place.
@@ -210,7 +211,7 @@ Où vivent les données :
 | Environnement | Emplacement | Durée de vie |
 |---|---|---|
 | `./gradlew :book-store:bootRun` | `book-store/data/` (ignoré par Git) | Jusqu'à suppression du répertoire |
-| `docker compose` | Volume `book-store-data` | Survit à un redémarrage ; `docker compose down -v` remet à zéro |
+| `docker compose` | Postgres 17 du service `db`, volume `book-store-db` | Survit à un redémarrage ; `docker compose down -v` remet à zéro |
 | Tests (`@DataJpaTest`, `contextLoads`) | Base en mémoire, tables créées par Hibernate, `data.sql` joué | Le temps du test |
 | Scaleway (production) | Base Postgres managée, profil `postgres` | Partagée par toutes les instances, survit aux redéploiements |
 | Scaleway (preview de PR) | Système de fichiers du container (HSQLDB, pas de profil) | Perdues à chaque redéploiement ; une preview ne touche jamais la base de production |
@@ -233,7 +234,7 @@ Le job `deploy` de la CI pose tout l'environnement du container de production à
 
 Le profil n'a aucune valeur par défaut : une variable absente fait échouer le démarrage, puis le smoke test du déploiement, au lieu de retomber sur HSQLDB. Une `DATABASE_URL` absente apparaît dans les logs comme `'url' must start with "jdbc"`.
 
-`data.sql` est compatible avec les deux moteurs (`MERGE` existe depuis Postgres 15). Il a été vérifié sur Postgres 17 : tables créées par Hibernate, données de départ insérées une seule fois, même après un redémarrage.
+`data.sql` est compatible avec les deux moteurs (`MERGE` existe depuis Postgres 15). Les TI le jouent sur Postgres 17 à chaque build. Une base de production en version 14 ou moins ne démarrerait pas.
 
 Limite assumée : le schéma de production reste géré par `ddl-auto: update`. Sur une base qui dure, un outil de migration (Flyway) devient nécessaire dès qu'une colonne doit être renommée ou supprimée.
 
