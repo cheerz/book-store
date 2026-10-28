@@ -26,6 +26,7 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -66,6 +67,7 @@ jobs:
   integration-test:
     needs: build-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -139,6 +141,7 @@ jobs:
     needs: integration-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Download tested image
@@ -189,6 +192,7 @@ jobs:
     needs: push-to-scw-registery
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 10
 
     steps:
       - name: Set up Scaleway CLI
@@ -200,6 +204,15 @@ jobs:
           secret-key: ${{ secrets.SCW_SECRET_KEY }}
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
+
+      # Nécessaire pour pouvoir revenir en arrière si le smoke test échoue :
+      # c'est la seule trace de "ce qui tournait avant ce déploiement".
+      - name: Capture currently deployed image
+        id: current
+        run: |
+          PREVIOUS_IMAGE=$(scw container container get ${{ secrets.SCW_CONTAINER_ID }} \
+            region=${{ env.SCW_REGION }} -o json | jq -r .registry_image)
+          echo "image=$PREVIOUS_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Deploy serverless container
         run: |
@@ -216,12 +229,25 @@ jobs:
             "${ENDPOINT}${HEALTH_PATH}"
           echo "Deployed: ${ENDPOINT}${HEALTH_PATH}" >> "$GITHUB_STEP_SUMMARY"
 
+      # Si le déploiement ou le smoke test échoue, on revient immédiatement à
+      # l'image qui tournait avant ce run plutôt que de laisser une version
+      # cassée en prod jusqu'à une intervention manuelle.
+      - name: Rollback to previous image on failure
+        if: failure() && steps.current.outcome == 'success'
+        run: |
+          echo "::warning::Deploy failed, rolling back to ${{ steps.current.outputs.image }}"
+          scw container container update ${{ secrets.SCW_CONTAINER_ID }} \
+            image=${{ steps.current.outputs.image }} \
+            region=${{ env.SCW_REGION }}
+          echo "### :rotating_light: Déploiement échoué — rollback vers \`${{ steps.current.outputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
+
   # Sur chaque push vers une branche de PR : l'image testée part vers un tag
   # dédié à la PR, pour alimenter le déploiement de preview.
   push-to-scw-pr-preview:
     needs: integration-test
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Download tested image
@@ -253,6 +279,7 @@ jobs:
     needs: push-to-scw-pr-preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       pull-requests: write
 
