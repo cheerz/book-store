@@ -1,11 +1,10 @@
 package com.example.bookstore.bff.catalog
 
-import com.example.bookstore.catalog.domain.Book
-import com.example.bookstore.catalog.domain.BookManager
-import com.example.bookstore.pricing.domain.Price
-import com.example.bookstore.pricing.domain.PriceManager
-import com.example.bookstore.pricing.domain.PriceQuote
-import com.example.bookstore.pricing.domain.ProductType
+import com.example.bookstore.book.domain.Book
+import com.example.bookstore.book.domain.BookManager
+import com.example.bookstore.format.domain.Format
+import com.example.bookstore.format.domain.FormatManager
+import com.example.bookstore.format.domain.Price
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest
@@ -36,14 +35,11 @@ class AddBookRequestValidationTest
                 }
 
             @Bean
-            fun priceManager(): PriceManager =
-                object : PriceManager {
-                    override fun quote(
-                        basePriceInCents: Long,
-                        productType: ProductType,
-                    ): PriceQuote = PriceQuote(Price(basePriceInCents), Price(0), Price(basePriceInCents))
+            fun formatManager(): FormatManager =
+                object : FormatManager {
+                    override fun getFormats(): List<Format> = emptyList()
 
-                    override fun surchargeFor(productType: ProductType): Price = Price(0)
+                    override fun formatOf(label: String): Format = Format("E_BOOK", label, Price(0))
                 }
         }
 

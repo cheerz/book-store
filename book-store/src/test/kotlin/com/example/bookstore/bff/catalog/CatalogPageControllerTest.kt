@@ -1,15 +1,13 @@
 package com.example.bookstore.bff.catalog
 
-import com.example.bookstore.bff.InvalidBookFormatException
 import com.example.bookstore.bff.InvalidBookKindException
-import com.example.bookstore.catalog.domain.Book
-import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookKind
-import com.example.bookstore.catalog.domain.BookManager
-import com.example.bookstore.pricing.domain.Price
-import com.example.bookstore.pricing.domain.PriceManager
-import com.example.bookstore.pricing.domain.PriceQuote
-import com.example.bookstore.pricing.domain.ProductType
+import com.example.bookstore.book.domain.Book
+import com.example.bookstore.book.domain.BookKind
+import com.example.bookstore.book.domain.BookManager
+import com.example.bookstore.format.domain.Format
+import com.example.bookstore.format.domain.FormatManager
+import com.example.bookstore.format.domain.Price
+import com.example.bookstore.format.domain.UnknownFormatException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -19,8 +17,8 @@ class CatalogPageControllerTest {
         object : BookManager {
             val stored =
                 mutableListOf(
-                    Book("Dune", BookKind.SF, BookFormat.HARDCOVER, 1_200, id = 1),
-                    Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 900, id = 2),
+                    Book("Dune", BookKind.SF, "HARDCOVER", 1_200, id = 1),
+                    Book("Shining", BookKind.THRILLER, "E_BOOK", 900, id = 2),
                 )
 
             override fun getBooks() = stored.toList()
@@ -28,28 +26,23 @@ class CatalogPageControllerTest {
             override fun createBook(book: Book) = book.copy(id = stored.size + 1L).also { stored.add(it) }
         }
 
-    private val prices =
-        object : PriceManager {
-            override fun quote(
-                basePriceInCents: Long,
-                productType: ProductType,
-            ): PriceQuote {
-                val surcharge = surchargeFor(productType)
-                return PriceQuote(Price(basePriceInCents), surcharge, Price(basePriceInCents) + surcharge)
-            }
+    private val formats =
+        object : FormatManager {
+            override fun getFormats() =
+                listOf(
+                    Format("E_BOOK", "e-book", Price(500)),
+                    Format("POCKET", "pocket", Price(750)),
+                    Format("HARDCOVER", "hardcover", Price(1_000)),
+                )
 
-            override fun surchargeFor(productType: ProductType): Price =
-                when (productType) {
-                    ProductType.HARDCOVER -> Price(1_000)
-                    ProductType.POCKET -> Price(750)
-                    ProductType.E_BOOK -> Price(500)
-                }
+            override fun formatOf(label: String) =
+                getFormats().find { it.label == label } ?: throw UnknownFormatException(label, emptyList())
         }
 
-    private val controller = CatalogPageController(books, prices)
+    private val controller = CatalogPageController(books, formats)
 
     @Test
-    fun `shows each book with the price breakdown computed by pricing`() {
+    fun `shows each book with its price, its format price and their total`() {
         assertEquals(
             listOf(
                 CatalogPageItem(1, "Dune", "sf", "hardcover", 1_200, 1_000, 2_200),
@@ -85,10 +78,19 @@ class CatalogPageControllerTest {
 
     @Test
     fun `refuses a book of an unknown format`() {
-        assertFailsWith<InvalidBookFormatException> {
+        assertFailsWith<UnknownFormatException> {
             controller.addBook(AddBookRequestDto("Dune", "sf", "huge", 500))
         }
 
         assertEquals(2, controller.page().books.size)
+    }
+
+    @Test
+    fun `cannot show a stored book whose format is no longer offered`() {
+        books.stored.add(Book("Hyperion", BookKind.SF, "LEATHER", 1_500, id = 3))
+
+        val missing = assertFailsWith<MissingFormatException> { controller.page() }
+
+        assertEquals("LEATHER", missing.formatCode)
     }
 }

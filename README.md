@@ -105,28 +105,28 @@ conteneur déployé, avec retries. Rien à lancer en local.
 
 ```
 front ──HTTP──▶ bff/                     adapter inbound + orchestrateur
-                 │  appelle les ports inbound (BookManager, PriceManager)
+                 │  appelle les ports inbound (BookManager, FormatManager)
        ┌─────────┴──────────┐
        ▼                    ▼
- catalog/domain        pricing/domain    modèle, règles métier, ports
-       │                    │  ports outbound (BookRepository, PriceRepository)
+ book/domain           format/domain     modèle, règles métier, ports
+       │                    │  ports outbound (BookRepository, FormatRepository)
        ▼                    ▼
- catalog/adapter/      pricing/adapter/
+ book/adapter/         format/adapter/
    outbound/             outbound/       implémentations JPA (HSQLDB)
 ```
 
 Deux règles structurent le code :
 
-- un domaine ne connaît pas les autres : `catalog` n'importe rien de `pricing`, et inversement ;
+- un domaine ne connaît pas les autres : `book` n'importe rien de `format`, et inversement ;
 - tout ce qui croise plusieurs domaines passe par le BFF.
 
 ### Domaines : hexagonal simplifié
 
-Chaque domaine est un package (`catalog`, `pricing`) organisé ainsi :
+Chaque domaine est un package (`book`, `format`) organisé ainsi :
 
 | Emplacement | Contenu | Exemple |
 |---|---|---|
-| `domain/` | Modèle et règles métier | `Book`, `Price` (refus d'un prix négatif) |
+| `domain/` | Modèle et règles métier | `Book` (titre de 1 à 255 caractères, prix positif), `Format` (code, libellé, supplément) |
 | `domain/` | Port inbound : ce que l'extérieur peut demander au domaine | `BookManager` |
 | `domain/` | Implémentation du port inbound | `BookManagerImpl` |
 | `domain/` | Port outbound : ce dont le domaine a besoin | `BookRepository` |
@@ -146,9 +146,11 @@ Le package `bff/` est l'adapter inbound de l'application : c'est le seul point d
 Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à part, dans `web/`.
 
 - **Un contrôleur par page** : `/pages/home`, `/pages/catalog`. Chaque contrôleur (`HomePageController`, `CatalogPageController`) renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
-- **Orchestrateur** : un contrôleur peut appeler plusieurs domaines. `CatalogPageController` combine `catalog` (les livres) et `pricing` (le prix de chaque format).
-- **Traduction typée entre domaines** : `catalog` parle de `BookFormat`, `pricing` de `ProductType`. Le BFF passe de l'un à l'autre avec un `when` exhaustif : un format ajouté sans son type de produit ne compile pas. Côté `pricing`, les prix sont en base : un type de produit ajouté sans son prix dans `data.sql` fait échouer `JpaPriceRepositoryTest`.
-- **Libellés** : le BFF traduit les libellés des fronts (`"e-book"`, `"sf"`) vers les enums du domaine et inversement (`bff/BookLabels.kt`), après normalisation des espaces et de la casse. Un libellé inconnu lève `InvalidBookKindException` ou `InvalidBookFormatException` (422). Le domaine ne connaît que ses enums.
+- **Orchestrateur** : un contrôleur peut appeler plusieurs domaines. `CatalogPageController` combine `book` (les livres) et `format` (les formats proposés et leur supplément).
+- **Référentiel des formats** : le domaine `format` est le seul à connaître les formats proposés, stockés en base (`product_formats` : code, libellé, supplément). Un livre ne garde que le code de son format (`Book.formatCode`). Ajouter un format = une ligne en base, sans recompiler.
+- **Prix total calculé par le BFF** : `book` connaît le prix du livre, `format` le supplément, et aucun des deux ne connaît l'autre. Le BFF les additionne (`CatalogPageController`). Si le calcul s'enrichit (promos, TVA, arrondis), il sortira du BFF vers un domaine `pricing` dédié.
+- **Format introuvable** : un livre stocké dont le code de format n'existe plus en base fait échouer la page (`MissingFormatException`, `BBE-14`). C'est la contrepartie d'un référentiel en base : le compilateur ne garantit plus qu'un format existe.
+- **Libellés** : le BFF traduit les libellés de genre des fronts (`"sf"`) vers l'enum `BookKind` et inversement (`bff/BookLabels.kt`). Les libellés de format (`"e-book"`) viennent du référentiel : `FormatManager.formatOf` les résout. Les deux normalisent espaces et casse. Un libellé inconnu lève `InvalidBookKindException` ou `UnknownFormatException` (422).
 - **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par un nouveau contrôleur, sans modifier les endpoints ni les domaines existants.
 - **Orchestrateur et formateur pour les fronts** : le BFF orchestre les appels aux domaines et met leurs réponses en forme pour la page qui les affiche : agrégation, mapping, choix de ce qui est montré (par exemple les trois derniers ajouts de la page d'accueil).
 
@@ -157,14 +159,14 @@ Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à p
 Quand une ressource doit être accessible directement, hors d'une page (autre service, batch, API publique), on ajoute un adapter inbound au domaine concerné :
 
 ```
-catalog/adapter/inbound/rest/BookController.kt   → appelle BookManager
+book/adapter/inbound/rest/BookController.kt   → appelle BookManager
 ```
 
 Il coexiste avec le BFF, et les deux passent par le même port inbound : aucun ne contourne le domaine. On ne crée cet adapter que lorsque le besoin existe.
 
 ### `@Service` dans le domaine : KISS
 
-Les implémentations des ports inbound portent directement `@Service` (`BookManagerImpl`, `PriceManagerImpl`). Ça évite une classe `@Configuration` par domaine qui ne ferait que déclarer des beans.
+Les implémentations des ports inbound portent directement `@Service` (`BookManagerImpl`, `FormatManagerImpl`). Ça évite une classe `@Configuration` par domaine qui ne ferait que déclarer des beans.
 
 Le compromis est assumé :
 
@@ -179,9 +181,9 @@ Si un domaine doit un jour se passer de Spring (librairie partagée, autre runti
 - `web/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `BBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "statusCode", "errorCode", "userMessage", "developerSummary", "developerMessage", "requestId" } }`.
 - `userMessage` est le seul texte destiné à l'utilisateur final : c'est lui que le front affiche. Les champs `developer*` restent pour le debug.
 - `developerMessage` ne contient que des messages écrits dans ce code : celui de l'exception métier, ou la liste des champs invalides. Les messages de Spring et de Jackson ne partent jamais au client, car ils contiennent des noms de classes internes.
-- 400 = forme de la requête : champ absent ou vide, vérifié par `@Valid` sur le DTO → `BBE-1`. 422 = règle métier : levée par le domaine (titre de 1 à 255 caractères, prix positif) ou par le BFF (genre ou format inconnu).
+- 400 = forme de la requête : champ absent ou vide, vérifié par `@Valid` sur le DTO → `BBE-1`. 422 = règle métier : levée par le domaine (titre de 1 à 255 caractères, prix positif, format inconnu) ou par le BFF (genre inconnu).
 - Les erreurs du framework gardent leur statut HTTP : route inconnue → `BBE-7` (404), méthode non supportée → `BBE-12` (405), `Content-Type` non supporté → `BBE-13` (415). Les autres gardent leur statut avec le code générique `BBE-1`.
-- Une erreur de configuration a son propre code : un type de produit sans prix → `BBE-14` (500).
+- Une incohérence de données a son propre code : un livre dont le format n'existe plus → `BBE-14` (500).
 - Une exception non mappée devient `BBE-0` (500). Aucun 5xx n'expose son message.
 
 Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `BbeError` (avec son `userMessage`), un cas dans `ErrorHandlingAdvice.bbeFor`.
@@ -198,9 +200,9 @@ Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `BbeE
 - **Scaleway** : profil Spring `postgres` (`application-postgres.yaml`), qui pointe la datasource vers une base Postgres managée.
 - **Pourquoi pas H2** : H2 est sous MPL 2.0 / EPL 1.0, hors des licences autorisées (MIT, Apache 2.0, BSD). HSQLDB et le driver Postgres sont sous licence BSD.
 - **Schéma** : Hibernate le crée et le complète à partir des entités (`ddl-auto: update`). Pas d'outil de migration, pour rester simple. Limite : `update` ajoute les tables et les colonnes manquantes, mais ne supprime, ne renomme et ne modifie jamais rien. Renommer un champ laisse l'ancienne colonne en place.
-- **Données de départ** : `src/main/resources/data.sql`, joué à chaque démarrage après Hibernate. Chaque requête n'insère que ce qui manque : les prix absents, et les livres de départ seulement si le catalogue est vide. Un redémarrage ne crée donc pas de doublon.
-- **Enums stockés en `String`** : `BookEntity.kind`, `BookEntity.format` et `ProductPriceEntity.productType` sont des `String`, convertis vers l'enum dans l'adapter. Avec `@Enumerated`, Hibernate pose un `check (kind in (...))` que `update` ne met jamais à jour : une valeur ajoutée à l'enum serait refusée par la base.
-- **Hexagonal** : les entités JPA (`BookEntity`, `ProductPriceEntity`) et les interfaces Spring Data restent dans `adapter/outbound/`. Le domaine ne connaît que ses ports et ses objets (`Book`, `Price`). L'adapter fait la conversion dans les deux sens.
+- **Données de départ** : `src/main/resources/data.sql`, joué à chaque démarrage après Hibernate. Chaque requête n'insère que ce qui manque : les formats absents, et les livres de départ seulement si le catalogue est vide. Un redémarrage ne crée donc pas de doublon.
+- **Enums stockés en `String`** : `BookEntity.kind` est une `String`, convertie vers l'enum dans l'adapter. Avec `@Enumerated`, Hibernate pose un `check (kind in (...))` que `update` ne met jamais à jour : une valeur ajoutée à l'enum serait refusée par la base.
+- **Hexagonal** : les entités JPA (`BookEntity`, `ProductFormatEntity`) et les interfaces Spring Data restent dans `adapter/outbound/`. Le domaine ne connaît que ses ports et ses objets (`Book`, `Format`, `Price`). L'adapter fait la conversion dans les deux sens.
 - **Ordre** : `JpaBookRepository.findAll()` trie par id, c'est-à-dire par ordre d'ajout. La page d'accueil en tire ses « derniers ajouts ».
 
 Où vivent les données :

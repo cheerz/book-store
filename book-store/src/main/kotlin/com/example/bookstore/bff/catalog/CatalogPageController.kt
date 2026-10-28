@@ -1,13 +1,11 @@
 package com.example.bookstore.bff.catalog
 
-import com.example.bookstore.bff.bookFormatOf
 import com.example.bookstore.bff.bookKindOf
 import com.example.bookstore.bff.label
-import com.example.bookstore.catalog.domain.Book
-import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookManager
-import com.example.bookstore.pricing.domain.PriceManager
-import com.example.bookstore.pricing.domain.ProductType
+import com.example.bookstore.book.domain.Book
+import com.example.bookstore.book.domain.BookManager
+import com.example.bookstore.format.domain.Format
+import com.example.bookstore.format.domain.FormatManager
 import jakarta.validation.Valid
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
@@ -19,14 +17,18 @@ import org.springframework.web.bind.annotation.RestController
 @RequestMapping("/pages/catalog")
 class CatalogPageController(
     private val bookManager: BookManager,
-    private val priceManager: PriceManager,
+    private val formatManager: FormatManager,
 ) {
     @GetMapping
-    fun page(): CatalogPageDto =
-        CatalogPageDto(
-            books = bookManager.getBooks().map(::toItem),
-            formats = BookFormat.entries.map(::toFormatOption),
+    fun page(): CatalogPageDto {
+        val formats = formatManager.getFormats()
+        val formatsByCode = formats.associateBy { it.code }
+
+        return CatalogPageDto(
+            books = bookManager.getBooks().map { toItem(it, formatsByCode) },
+            formats = formats.map(::toFormatOption),
         )
+    }
 
     @PostMapping("/books")
     fun addBook(
@@ -36,38 +38,36 @@ class CatalogPageController(
         return page()
     }
 
-    private fun toItem(book: Book): CatalogPageItem {
-        val quote = priceManager.quote(basePriceInCents = book.priceInCents, productType = book.format.toProductType())
+    private fun toItem(
+        book: Book,
+        formatsByCode: Map<String, Format>,
+    ): CatalogPageItem {
+        val format = formatsByCode[book.formatCode] ?: throw MissingFormatException(book.formatCode)
+        val formatPriceInCents = format.surcharge.amountInCents
 
         return CatalogPageItem(
             id = checkNotNull(book.id),
             title = book.title,
             kind = book.kind.label,
-            format = book.format.label,
-            bookPriceInCents = quote.base.amountInCents,
-            formatPriceInCents = quote.surcharge.amountInCents,
-            totalPriceInCents = quote.total.amountInCents,
+            format = format.label,
+            bookPriceInCents = book.priceInCents,
+            formatPriceInCents = formatPriceInCents,
+            // book and format do not know each other: the BFF is the only place holding both prices.
+            totalPriceInCents = book.priceInCents + formatPriceInCents,
         )
     }
 
-    private fun toFormatOption(format: BookFormat): FormatOption =
+    private fun toFormatOption(format: Format): FormatOption =
         FormatOption(
             format = format.label,
-            priceInCents = priceManager.surchargeFor(format.toProductType()).amountInCents,
+            priceInCents = format.surcharge.amountInCents,
         )
-
-    private fun BookFormat.toProductType(): ProductType =
-        when (this) {
-            BookFormat.E_BOOK -> ProductType.E_BOOK
-            BookFormat.POCKET -> ProductType.POCKET
-            BookFormat.HARDCOVER -> ProductType.HARDCOVER
-        }
 
     private fun toBook(request: AddBookRequestDto): Book =
         Book(
             title = checkNotNull(request.title),
             kind = bookKindOf(checkNotNull(request.kind)),
-            format = bookFormatOf(checkNotNull(request.format)),
+            formatCode = formatManager.formatOf(checkNotNull(request.format)).code,
             priceInCents = checkNotNull(request.bookPriceInCents),
         )
 }

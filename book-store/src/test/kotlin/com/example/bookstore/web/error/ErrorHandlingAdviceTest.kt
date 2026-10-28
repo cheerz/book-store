@@ -1,14 +1,12 @@
 package com.example.bookstore.web.error
 
-import com.example.bookstore.bff.InvalidBookFormatException
 import com.example.bookstore.bff.InvalidBookKindException
 import com.example.bookstore.bff.catalog.AddBookRequestDto
 import com.example.bookstore.bff.catalog.CatalogPageController
-import com.example.bookstore.catalog.domain.InvalidBookPriceException
-import com.example.bookstore.catalog.domain.InvalidBookTitleException
-import com.example.bookstore.pricing.domain.InvalidPriceException
-import com.example.bookstore.pricing.domain.MissingProductPriceException
-import com.example.bookstore.pricing.domain.ProductType
+import com.example.bookstore.bff.catalog.MissingFormatException
+import com.example.bookstore.book.domain.InvalidBookPriceException
+import com.example.bookstore.book.domain.InvalidBookTitleException
+import com.example.bookstore.format.domain.UnknownFormatException
 import com.example.bookstore.web.observability.RequestIdFilter
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.extension.ExtendWith
@@ -57,7 +55,7 @@ class ErrorHandlingAdviceTest {
 
     @Test
     fun `wraps an invalid book format in BBE-8`() {
-        val (status, error) = errorFor(InvalidBookFormatException("huge"))
+        val (status, error) = errorFor(UnknownFormatException("huge", listOf("e-book", "pocket", "hardcover")))
 
         assertEquals(422, status)
         assertEquals("BBE-8", error.errorCode)
@@ -67,11 +65,6 @@ class ErrorHandlingAdviceTest {
     @Test
     fun `wraps a negative book price in BBE-9`() {
         assertEquals("BBE-9", errorFor(InvalidBookPriceException(-100)).second.errorCode)
-    }
-
-    @Test
-    fun `wraps a negative price from pricing in BBE-9`() {
-        assertEquals("BBE-9", errorFor(InvalidPriceException(-100)).second.errorCode)
     }
 
     @Test
@@ -159,8 +152,8 @@ class ErrorHandlingAdviceTest {
     }
 
     @Test
-    fun `wraps a missing product price in BBE-14 without leaking its message`() {
-        val (status, error) = errorFor(MissingProductPriceException(ProductType.POCKET))
+    fun `wraps a missing format in BBE-14 without leaking its message`() {
+        val (status, error) = errorFor(MissingFormatException("LEATHER"))
 
         assertEquals(500, status)
         assertEquals("BBE-14", error.errorCode)
@@ -168,10 +161,10 @@ class ErrorHandlingAdviceTest {
     }
 
     @Test
-    fun `logs a missing product price with its stack trace`(output: CapturedOutput) {
-        errorFor(MissingProductPriceException(ProductType.POCKET))
+    fun `logs a missing format with its stack trace`(output: CapturedOutput) {
+        errorFor(MissingFormatException("LEATHER"))
 
-        assertContains(output.out, "MissingProductPriceException: No price configured for product type: POCKET")
+        assertContains(output.out, "MissingFormatException: No format configured for code: LEATHER")
     }
 
     @Test

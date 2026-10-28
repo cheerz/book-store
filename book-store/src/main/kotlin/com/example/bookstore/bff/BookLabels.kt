@@ -1,7 +1,6 @@
 package com.example.bookstore.bff
 
-import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookKind
+import com.example.bookstore.book.domain.BookKind
 
 val BookKind.label: String
     get() =
@@ -11,20 +10,8 @@ val BookKind.label: String
             BookKind.THRILLER -> "thriller"
         }
 
-val BookFormat.label: String
-    get() =
-        when (this) {
-            BookFormat.E_BOOK -> "e-book"
-            BookFormat.POCKET -> "pocket"
-            BookFormat.HARDCOVER -> "hardcover"
-        }
-
 fun bookKindOf(label: String): BookKind =
     BookKind.entries.find { it.label == normalize(label) }
         ?: throw InvalidBookKindException(label)
-
-fun bookFormatOf(label: String): BookFormat =
-    BookFormat.entries.find { it.label == normalize(label) }
-        ?: throw InvalidBookFormatException(label)
 
 private fun normalize(label: String): String = label.trim().lowercase()

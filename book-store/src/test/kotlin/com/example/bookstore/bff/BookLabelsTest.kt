@@ -1,7 +1,6 @@
 package com.example.bookstore.bff
 
-import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookKind
+import com.example.bookstore.book.domain.BookKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -20,20 +19,5 @@ class BookLabelsTest {
             }
 
         assertEquals("romance", refused.receivedKind)
-    }
-
-    @Test
-    fun `resolves an accepted format whatever its case`() {
-        assertEquals(BookFormat.E_BOOK, bookFormatOf(" E-Book "))
-    }
-
-    @Test
-    fun `rejects a format outside the accepted ones`() {
-        val refused =
-            assertFailsWith<InvalidBookFormatException> {
-                bookFormatOf("huge")
-            }
-
-        assertEquals("huge", refused.receivedFormat)
     }
 }

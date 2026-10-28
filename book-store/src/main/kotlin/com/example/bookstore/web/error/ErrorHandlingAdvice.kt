@@ -1,11 +1,10 @@
 package com.example.bookstore.web.error
 
-import com.example.bookstore.bff.InvalidBookFormatException
 import com.example.bookstore.bff.InvalidBookKindException
-import com.example.bookstore.catalog.domain.InvalidBookPriceException
-import com.example.bookstore.catalog.domain.InvalidBookTitleException
-import com.example.bookstore.pricing.domain.InvalidPriceException
-import com.example.bookstore.pricing.domain.MissingProductPriceException
+import com.example.bookstore.bff.catalog.MissingFormatException
+import com.example.bookstore.book.domain.InvalidBookPriceException
+import com.example.bookstore.book.domain.InvalidBookTitleException
+import com.example.bookstore.format.domain.UnknownFormatException
 import com.example.bookstore.web.observability.RequestIdFilter
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -42,10 +41,10 @@ class ErrorHandlingAdvice {
     private fun bbeFor(exception: Exception): BbeError =
         when (exception) {
             is InvalidBookKindException -> BbeError.INVALID_BOOK_KIND
-            is InvalidBookFormatException -> BbeError.INVALID_BOOK_FORMAT
+            is UnknownFormatException -> BbeError.INVALID_BOOK_FORMAT
             is InvalidBookTitleException -> BbeError.INVALID_BOOK_TITLE
-            is InvalidBookPriceException, is InvalidPriceException -> BbeError.INVALID_PRICE_DEFINITION
-            is MissingProductPriceException -> BbeError.MISSING_PRODUCT_PRICE
+            is InvalidBookPriceException -> BbeError.INVALID_PRICE_DEFINITION
+            is MissingFormatException -> BbeError.MISSING_FORMAT
             is HttpMessageNotReadableException -> BbeError.BAD_REQUEST
             is ErrorResponse -> bbeForStatus(exception.statusCode)
             else -> BbeError.SERVER_ERROR

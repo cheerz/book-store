@@ -1,7 +1,7 @@
-MERGE INTO product_prices p
-USING (VALUES ('HARDCOVER', 1000), ('POCKET', 750), ('E_BOOK', 500)) AS v (product_type, amount_in_cents)
-ON p.product_type = TRIM(v.product_type)
-WHEN NOT MATCHED THEN INSERT (product_type, amount_in_cents) VALUES (TRIM(v.product_type), v.amount_in_cents);
+MERGE INTO product_formats f
+USING (VALUES ('HARDCOVER', 'hardcover', 1000), ('POCKET', 'pocket', 750), ('E_BOOK', 'e-book', 500)) AS v (code, label, surcharge_in_cents)
+ON f.code = TRIM(v.code)
+WHEN NOT MATCHED THEN INSERT (code, label, surcharge_in_cents) VALUES (TRIM(v.code), TRIM(v.label), v.surcharge_in_cents);
 
 INSERT INTO books (title, kind, format, price_in_cents)
 SELECT TRIM(v.title), TRIM(v.kind), TRIM(v.format), v.price_in_cents

@@ -14,7 +14,7 @@ enum class BbeError(
     INVALID_BOOK_KIND("BBE-10", "Invalid book kind.", 422, "Ce genre de livre n'est pas proposé."),
     METHOD_NOT_ALLOWED("BBE-12", "Bad endpoint.", 405, "Cette action n'est pas disponible."),
     UNSUPPORTED_MEDIA_TYPE("BBE-13", "Unsupported media type.", 415, "La demande est incomplète ou mal formée."),
-    MISSING_PRODUCT_PRICE("BBE-14", "Missing product price.", 500, "Une erreur est survenue, réessaie dans quelques instants."),
+    MISSING_FORMAT("BBE-14", "Missing format.", 500, "Une erreur est survenue, réessaie dans quelques instants."),
     INVALID_BOOK_TITLE("BBE-15", "Invalid book title.", 422, "Le titre doit contenir entre 1 et 255 caractères."),
     ;
 

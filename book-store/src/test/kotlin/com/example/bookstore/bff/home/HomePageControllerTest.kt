@@ -1,9 +1,8 @@
 package com.example.bookstore.bff.home
 
-import com.example.bookstore.catalog.domain.Book
-import com.example.bookstore.catalog.domain.BookFormat
-import com.example.bookstore.catalog.domain.BookKind
-import com.example.bookstore.catalog.domain.BookManager
+import com.example.bookstore.book.domain.Book
+import com.example.bookstore.book.domain.BookKind
+import com.example.bookstore.book.domain.BookManager
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -12,10 +11,10 @@ class HomePageControllerTest {
         object : BookManager {
             override fun getBooks() =
                 listOf(
-                    Book("Bilbo", BookKind.FANTASY, BookFormat.E_BOOK, 1_000),
-                    Book("Dune", BookKind.SF, BookFormat.E_BOOK, 1_000),
-                    Book("Hyperion", BookKind.SF, BookFormat.E_BOOK, 1_000),
-                    Book("Shining", BookKind.THRILLER, BookFormat.E_BOOK, 1_000),
+                    Book("Bilbo", BookKind.FANTASY, "E_BOOK", 1_000),
+                    Book("Dune", BookKind.SF, "E_BOOK", 1_000),
+                    Book("Hyperion", BookKind.SF, "E_BOOK", 1_000),
+                    Book("Shining", BookKind.THRILLER, "E_BOOK", 1_000),
                 )
 
             override fun createBook(book: Book) = book
