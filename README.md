@@ -88,3 +88,40 @@ Variables : `BASE_URL` (défaut `http://localhost:8080/api`), `READINESS_TIMEOUT
 
 Joué par la CI après chaque déploiement sur `master` : appel de `/api/health` sur le
 conteneur déployé, avec retries. Rien à lancer en local.
+
+## Déploiement
+
+Le pipeline (`.github/workflows/ci.yml`) démarre toujours par les mêmes étapes : tests
+unitaires, build du jar, build de l'image Docker, puis tests d'intégration boîte noire
+sur cette image. L'image ainsi validée est ensuite déployée différemment selon le
+contexte :
+
+- **Push sur `master`** → l'image est poussée sur le registre Scaleway puis déployée
+  sur le container de production. Un smoke test sur `/api/health` valide le
+  déploiement ; en cas d'échec, le container revient automatiquement à l'image
+  précédente (rollback).
+- **Pull request** → l'image est poussée sous un tag dédié (`pr-<numéro>`) et déployée
+  sur un container de preview propre à la PR, dont l'URL est commentée automatiquement
+  sur la PR.
+- **Fermeture de la pull request** → le container de preview associé est supprimé
+  (`pr-preview-cleanup.yml`).
+
+```mermaid
+flowchart TD
+    A["Push sur une branche"] --> B["Tests unitaires + build du jar"]
+    B --> C["Build image Docker"]
+    C --> D["Tests d'intégration boîte noire"]
+    D --> E{"Événement ?"}
+
+    E -- "Push sur master" --> F["Push image sur le registre SCW"]
+    F --> G["Déploiement container production"]
+    G --> H{"Smoke test /api/health"}
+    H -- "OK" --> I["Déploiement terminé"]
+    H -- "Échec" --> J["Rollback vers l'image précédente"]
+
+    E -- "Pull request" --> K["Push image taguée pr-numéro"]
+    K --> L["Déploiement container preview"]
+    L --> M["Commentaire URL preview sur la PR"]
+
+    N["Fermeture de la PR"] --> O["Suppression container preview"]
+```
