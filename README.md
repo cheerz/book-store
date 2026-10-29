@@ -1,222 +1,56 @@
 # book-store
 
-API Spring Boot (Kotlin) de gestion d'un catalogue de livres, servie sous `/api`.
+API Spring Boot (Kotlin) d'un catalogue de livres, servie sous `/api`.
 Les fronts n'appellent que les vues BFF (`/pages/...`).
-L'architecture et ses raisons sont décrites dans [Choix techniques](#choix-techniques).
 
 ## Prérequis
 
-- JDK 25
-- Docker, avec `docker compose` ou `docker-compose` (sur macOS : `colima start`)
+- JDK 25 (`brew install openjdk@25` ou `sdk install java 25-tem`)
+- Docker avec `docker compose` (sur macOS : `colima start`)
 
-### Installer Java 25 sur macOS
-
-Avec [Homebrew](https://brew.sh) :
+## Lancer
 
 ```bash
-brew install openjdk@25
-sudo ln -sfn /opt/homebrew/opt/openjdk@25/libexec/openjdk.jdk /Library/Java/JavaVirtualMachines/openjdk-25.jdk
+./gradlew :book-store:bootRun          # HSQLDB locale, dans book-store/data/
+docker compose up -d --build           # comme en prod : Postgres 17 + profil postgres
+docker compose down -v                 # arrête et remet la base à zéro
 ```
 
-Ou avec [SDKMAN!](https://sdkman.io) :
-
 ```bash
-curl -s "https://get.sdkman.io" | bash
-sdk install java 25-tem
-```
-
-Vérifier l'installation :
-
-```bash
-java -version
-```
-
-## Lancer l'application
-
-```bash
-./gradlew :book-store:bootRun
-```
-
-L'API répond sur `http://localhost:8080/api` :
-
-```bash
-curl localhost:8080/api/health
-curl localhost:8080/api/pages/home
 curl localhost:8080/api/pages/catalog
 curl -H 'Content-Type: application/json' -d '{"title":"Dune","kind":"sf","format":"hardcover","bookPriceInCents":1200}' localhost:8080/api/pages/catalog/books
 ```
 
-Pour la lancer dans Docker, comme en production (avec un Postgres 17 à côté, profil `postgres`) :
+## Lint et tests
 
 ```bash
-./gradlew :book-store:bootJar
-docker compose up -d --build
-docker compose down -v
+./gradlew ktlintCheck            # ktlintFormat pour corriger
+./gradlew :book-store:test       # tests unitaires, sans Docker
+./gradlew ti                     # TI boîte noire sur Postgres 17 (compose up, tests, compose down)
+BASE_URL=http://localhost:8080/api ./gradlew :book-store-ti:integrationTest   # TI contre une app déjà lancée
 ```
 
-## Lint
-
-```bash
-./gradlew ktlintCheck    # vérifie, comme la CI
-./gradlew ktlintFormat   # corrige ce qui peut l'être automatiquement
-```
-
-## Tests
-
-Trois couches, de la moins chère à la plus chère.
-
-### 1. Tests unitaires — `book-store`
-
-Domaine et mapping, sans réseau ni Docker.
-
-```bash
-./gradlew :book-store:test
-```
-
-### 2. Tests d'intégration boîte noire — `book-store-ti`
-
-Le module ne dépend pas de l'application : il l'interroge en HTTP, via son contrat d'API.
-Il n'est pas lancé par `./gradlew build`.
-
-Contre l'application dockerisée (build du jar, montée de la stack, tests, démontage) :
-
-```bash
-./gradlew ti
-```
-
-Contre une application déjà démarrée :
-
-```bash
-BASE_URL=http://localhost:8080/api ./gradlew :book-store-ti:integrationTest
-```
-
-Variables : `BASE_URL` (défaut `http://localhost:8080/api`), `READINESS_TIMEOUT_SECONDS` (défaut `60`).
-
-Scénarios : `SmokeIT` (l'application répond), `AddBookIT` (ajout d'un livre et refus), `PagesIT` (contenu des pages).
-
-### 3. Smoke test post-déploiement
-
-Joué par la CI après chaque déploiement sur `master` : appel de `/api/health` sur le
-conteneur déployé, avec retries. Rien à lancer en local.
-
-## Choix techniques
-
-### Vue d'ensemble
+## Architecture
 
 ```
-front ──HTTP──▶ bff/                     adapter inbound + orchestrateur
-                 │  appelle les ports inbound (BookManager, FormatManager)
-       ┌─────────┴──────────┐
-       ▼                    ▼
- book/domain           format/domain     modèle, règles métier, ports
-       │                    │  ports outbound (BookRepository, FormatRepository)
-       ▼                    ▼
- book/adapter/         format/adapter/
-   outbound/             outbound/       implémentations JPA (HSQLDB)
+front ──▶ bff/            un contrôleur par page, orchestre les domaines
+           ├──▶ book/     livres
+           └──▶ format/   formats et leur supplément
 ```
 
-Deux règles structurent le code :
+- Chaque domaine : `domain/` (modèle, règles, ports) et `adapter/outbound/` (JPA).
+- Un domaine n'importe jamais l'autre : ce qui croise les deux passe par le BFF, par exemple le prix total (livre + supplément du format).
+- Les formats sont en base (`product_formats`) : un format = une ligne, sans recompiler.
+- Erreurs : exceptions métier nommées, traduites en code `BBE-*` par `web/error/ErrorHandlingAdvice`. 400 = requête mal formée, 422 = règle métier.
+- Chaque requête porte un id (`X-Request-Id`), repris dans les erreurs et les logs.
 
-- un domaine ne connaît pas les autres : `book` n'importe rien de `format`, et inversement ;
-- tout ce qui croise plusieurs domaines passe par le BFF.
+## Persistance
 
-### Domaines : hexagonal simplifié
+- Schéma créé par Hibernate (`ddl-auto: update`) : ajoute tables et colonnes, ne supprime ni ne renomme jamais.
+- `data.sql` est joué à chaque démarrage et n'insère que ce qui manque (formats, livres de départ si le catalogue est vide).
+- HSQLDB en local et dans les tests unitaires, Postgres 17 dans compose et les TI, Postgres managé en prod. Pas de H2 : licence hors MIT/Apache/BSD.
 
-Chaque domaine est un package (`book`, `format`) organisé ainsi :
-
-| Emplacement | Contenu | Exemple |
-|---|---|---|
-| `domain/` | Modèle et règles métier | `Book` (titre de 1 à 255 caractères, prix positif), `Format` (code, libellé, supplément) |
-| `domain/` | Port inbound : ce que l'extérieur peut demander au domaine | `BookManager` |
-| `domain/` | Implémentation du port inbound | `BookManagerImpl` |
-| `domain/` | Port outbound : ce dont le domaine a besoin | `BookRepository` |
-| `domain/` | Exceptions métier nommées | `InvalidBookTitleException` |
-| `adapter/outbound/` | Implémentation des ports outbound, avec ses entités JPA | `JpaBookRepository`, `BookEntity` |
-
-C'est « simplifié » par rapport à un hexagonal complet :
-
-- ports, implémentations et modèle partagent le package `domain/`, sans couche `application` ni use case séparé ;
-- pas de module de configuration par domaine (voir `@Service` ci-dessous).
-
-On garde l'essentiel : le domaine ne dépend d'aucun adapter, et tout passe par des interfaces. Un adapter se remplace sans toucher au domaine, et le domaine se teste avec des fakes.
-
-### BFF : adapter inbound, orchestrateur et formateur
-
-Le package `bff/` est l'adapter inbound de l'application : c'est le seul point d'entrée des fronts.
-Les briques HTTP communes à toutes les routes (erreurs, request id) vivent à part, dans `web/`.
-
-- **Un contrôleur par page** : `/pages/home`, `/pages/catalog`. Chaque contrôleur (`HomePageController`, `CatalogPageController`) renvoie exactement ce que la page affiche, dans ses propres DTO (`CatalogPageDto`, `HomePageDto`).
-- **Orchestrateur** : un contrôleur peut appeler plusieurs domaines. `CatalogPageController` combine `book` (les livres) et `format` (les formats proposés et leur supplément).
-- **Référentiel des formats** : le domaine `format` est le seul à connaître les formats proposés, stockés en base (`product_formats` : code, libellé, supplément). Un livre ne garde que le code de son format (`Book.formatCode`). Ajouter un format = une ligne en base, sans recompiler.
-- **Prix total calculé par le BFF** : `book` connaît le prix du livre, `format` le supplément, et aucun des deux ne connaît l'autre. Le BFF les additionne (`CatalogPageController`). Si le calcul s'enrichit (promos, TVA, arrondis), il sortira du BFF vers un domaine `pricing` dédié.
-- **Format introuvable** : un livre stocké dont le code de format n'existe plus en base fait échouer la page (`MissingFormatException`, `BBE-14`). C'est la contrepartie d'un référentiel en base : le compilateur ne garantit plus qu'un format existe.
-- **Libellés** : le BFF traduit les libellés de genre des fronts (`"sf"`) vers l'enum `BookKind` et inversement (`bff/BookLabels.kt`). Les libellés de format (`"e-book"`) viennent du référentiel : `FormatManager.formatOf` les résout. Les deux normalisent espaces et casse. Un libellé inconnu lève `InvalidBookKindException` ou `UnknownFormatException` (422).
-- **Ne pas casser l'existant** : le contrat de la page est découplé du modèle du domaine. Le domaine évolue sans casser le front, et une nouvelle page s'ajoute par un nouveau contrôleur, sans modifier les endpoints ni les domaines existants.
-- **Orchestrateur et formateur pour les fronts** : le BFF orchestre les appels aux domaines et met leurs réponses en forme pour la page qui les affiche : agrégation, mapping, choix de ce qui est montré (par exemple les trois derniers ajouts de la page d'accueil).
-
-### Adapter inbound par domaine : optionnel
-
-Quand une ressource doit être accessible directement, hors d'une page (autre service, batch, API publique), on ajoute un adapter inbound au domaine concerné :
-
-```
-book/adapter/inbound/rest/BookController.kt   → appelle BookManager
-```
-
-Il coexiste avec le BFF, et les deux passent par le même port inbound : aucun ne contourne le domaine. On ne crée cet adapter que lorsque le besoin existe.
-
-### `@Service` dans le domaine : KISS
-
-Les implémentations des ports inbound portent directement `@Service` (`BookManagerImpl`, `FormatManagerImpl`). Ça évite une classe `@Configuration` par domaine qui ne ferait que déclarer des beans.
-
-Le compromis est assumé :
-
-- le domaine dépend d'une annotation Spring, et de rien d'autre dans Spring ;
-- il reste testable sans contexte Spring : les tests instancient `BookManagerImpl(FakeBookRepository())`.
-
-Si un domaine doit un jour se passer de Spring (librairie partagée, autre runtime), on retire l'annotation et on déclare le bean dans une `@Configuration` côté adapter. Le changement reste local : les appelants ne voient que le port.
-
-### Erreurs
-
-- Les domaines lèvent des exceptions métier nommées.
-- `web/error/ErrorHandlingAdvice` est le seul endroit qui les traduit : un code `BBE-*` et un statut HTTP, dans l'enveloppe `{ "error": { "statusCode", "errorCode", "userMessage", "developerSummary", "developerMessage", "requestId" } }`.
-- `userMessage` est le seul texte destiné à l'utilisateur final : c'est lui que le front affiche. Les champs `developer*` restent pour le debug.
-- `developerMessage` ne contient que des messages écrits dans ce code : celui de l'exception métier, ou la liste des champs invalides. Les messages de Spring et de Jackson ne partent jamais au client, car ils contiennent des noms de classes internes.
-- 400 = forme de la requête : champ absent ou vide, vérifié par `@Valid` sur le DTO → `BBE-1`. 422 = règle métier : levée par le domaine (titre de 1 à 255 caractères, prix positif, format inconnu) ou par le BFF (genre inconnu).
-- Les erreurs du framework gardent leur statut HTTP : route inconnue → `BBE-7` (404), méthode non supportée → `BBE-12` (405), `Content-Type` non supporté → `BBE-13` (415). Les autres gardent leur statut avec le code générique `BBE-1`.
-- Une incohérence de données a son propre code : un livre dont le format n'existe plus → `BBE-14` (500).
-- Une exception non mappée devient `BBE-0` (500). Aucun 5xx n'expose son message.
-
-Ajouter une erreur métier = l'exception dans le domaine, une entrée dans `BbeError` (avec son `userMessage`), un cas dans `ErrorHandlingAdvice.bbeFor`.
-
-### Logs et request id
-
-- `web/observability/RequestIdFilter` attribue un id à chaque requête. Le même id est renvoyé dans l'en-tête `X-Request-Id`, dans le `requestId` des erreurs, et il préfixe chaque ligne de log (`logging.pattern.level`).
-- Le front affiche cet id comme « Référence » sous un message d'erreur : un utilisateur peut le transmettre, et on retrouve la requête dans les logs.
-- Un 5xx est loggué en `ERROR` avec sa stack trace. Une erreur client est logguée en `WARN` avec son code et sa classe seulement : son message reprend la saisie de l'utilisateur, qui pourrait injecter de fausses lignes de log.
-
-### Persistance : JPA, HSQLDB en `bootRun`, Postgres dans Docker et sur Scaleway
-
-- **Local** (par défaut) : HSQLDB embarquée dans l'application, stockée en fichiers dans `./data` (relatif au répertoire de lancement). Aucun serveur de base à installer.
-- **Docker** (`compose.yaml`, donc aussi les TI en local et en CI) : un service `db` en Postgres 17, et l'application en profil `postgres`. Les TI valident ainsi l'image sur le même moteur que la production.
-- **Scaleway** : profil Spring `postgres` (`application-postgres.yaml`), qui pointe la datasource vers une base Postgres managée.
-- **Pourquoi pas H2** : H2 est sous MPL 2.0 / EPL 1.0, hors des licences autorisées (MIT, Apache 2.0, BSD). HSQLDB et le driver Postgres sont sous licence BSD.
-- **Schéma** : Hibernate le crée et le complète à partir des entités (`ddl-auto: update`). Pas d'outil de migration, pour rester simple. Limite : `update` ajoute les tables et les colonnes manquantes, mais ne supprime, ne renomme et ne modifie jamais rien. Renommer un champ laisse l'ancienne colonne en place.
-- **Données de départ** : `src/main/resources/data.sql`, joué à chaque démarrage après Hibernate. Chaque requête n'insère que ce qui manque : les formats absents, et les livres de départ seulement si le catalogue est vide. Un redémarrage ne crée donc pas de doublon.
-- **Enums stockés en `String`** : `BookEntity.kind` est une `String`, convertie vers l'enum dans l'adapter. Avec `@Enumerated`, Hibernate pose un `check (kind in (...))` que `update` ne met jamais à jour : une valeur ajoutée à l'enum serait refusée par la base.
-- **Hexagonal** : les entités JPA (`BookEntity`, `ProductFormatEntity`) et les interfaces Spring Data restent dans `adapter/outbound/`. Le domaine ne connaît que ses ports et ses objets (`Book`, `Format`, `Price`). L'adapter fait la conversion dans les deux sens.
-- **Ordre** : `JpaBookRepository.findAll()` trie par id, c'est-à-dire par ordre d'ajout. La page d'accueil en tire ses « derniers ajouts ».
-
-Où vivent les données :
-
-| Environnement | Emplacement | Durée de vie |
-|---|---|---|
-| `./gradlew :book-store:bootRun` | `book-store/data/` (ignoré par Git) | Jusqu'à suppression du répertoire |
-| `docker compose` | Postgres 17 du service `db`, volume `book-store-db` | Survit à un redémarrage ; `docker compose down -v` remet à zéro |
-| Tests (`@DataJpaTest`, `contextLoads`) | Base en mémoire, tables créées par Hibernate, `data.sql` joué | Le temps du test |
-| Scaleway (production) | Base Postgres managée, profil `postgres` | Partagée par toutes les instances, survit aux redéploiements |
-| Scaleway (preview de PR) | Système de fichiers du container (HSQLDB, pas de profil) | Perdues à chaque redéploiement ; une preview ne touche jamais la base de production |
-
-#### Brancher la production sur Postgres
+### Brancher la production sur Postgres
 
 Le job `deploy` de la CI pose tout l'environnement du container de production à chaque déploiement :
 
@@ -238,30 +72,39 @@ Le profil n'a aucune valeur par défaut : une variable absente fait échouer le 
 
 Limite assumée : le schéma de production reste géré par `ddl-auto: update`. Sur une base qui dure, un outil de migration (Flyway) devient nécessaire dès qu'une colonne doit être renommée ou supprimée.
 
-### Tests
+## Déploiement
 
-| Couche | Ce qui est testé | Comment |
-|---|---|---|
-| Unitaires (`book-store`) | Règles du domaine, mapping et orchestration du BFF, traduction des erreurs | Fakes écrits à la main sur les ports, sans librairie de mock ; seuls `contextLoads` et la validation HTTP (`@WebMvcTest`) démarrent Spring |
-| Adapters JPA (`book-store`) | Les adapters outbound contre le vrai schéma et les données de départ | `@DataJpaTest` : base HSQLDB en mémoire, tables créées par Hibernate, `data.sql` joué |
-| Intégration (`book-store-ti`) | Le contrat HTTP de l'application déployée | Module séparé, sans dépendance vers `book-store` : un client Feign contre `BASE_URL` |
-| Smoke post-déploiement | L'application déployée répond | `curl` sur `/api/health` en CI |
+Le pipeline (`.github/workflows/ci.yml`) démarre toujours par les mêmes étapes : tests
+unitaires, build du jar, build de l'image Docker, puis tests d'intégration boîte noire
+sur cette image. L'image ainsi validée est ensuite déployée différemment selon le
+contexte :
 
-Le module de TI ne connaît que HTTP : il valide l'image réellement livrée, et la même suite tourne contre compose, une preview de PR ou un autre environnement.
+- **Push sur `master`** → l'image est poussée sur le registre Scaleway puis déployée
+  sur le container de production. Un smoke test sur `/api/health` valide le
+  déploiement ; en cas d'échec, le container revient automatiquement à l'image
+  précédente (rollback).
+- **Pull request** → l'image est poussée sous un tag dédié (`pr-<numéro>`) et déployée
+  sur un container de preview propre à la PR, dont l'URL est commentée automatiquement
+  sur la PR.
+- **Fermeture de la pull request** → le container de preview associé est supprimé
+  (`pr-preview-cleanup.yml`).
 
-### CI/CD
+```mermaid
+flowchart TD
+    A["Push sur une branche"] --> B["Tests unitaires + build du jar"]
+    B --> C["Build image Docker"]
+    C --> D["Tests d'intégration boîte noire"]
+    D --> E{"Événement ?"}
 
+    E -- "Push sur master" --> F["Push image sur le registre SCW"]
+    F --> G["Déploiement container production"]
+    G --> H{"Smoke test /api/health"}
+    H -- "OK" --> I["Déploiement terminé"]
+    H -- "Échec" --> J["Rollback vers l'image précédente"]
+
+    E -- "Pull request" --> K["Push image taguée pr-numéro"]
+    K --> L["Déploiement container preview"]
+    L --> M["Commentaire URL preview sur la PR"]
+
+    N["Fermeture de la PR"] --> O["Suppression container preview"]
 ```
-ktlint → TU → jar → image construite une fois → TI sur cette image
-       → push de la même image (sha + latest) → déploiement Scaleway → smoke test
-```
-
-- **Une seule image** : ce qui part en production est exactement ce que les TI ont validé, sans rebuild.
-- **Preview par PR** : chaque PR déploie son image dans un container dédié du namespace `book-store-pr-preview`, supprimé à la fermeture de la PR.
-- **Dockerfile runtime-only** : Gradle construit le jar, l'image se contente de l'exécuter, avec un utilisateur non-root. `compose.yaml` reprend la limite mémoire (512 Mo) et les options JVM du container Scaleway, pour voir les problèmes de heap en local.
-
-### Qualité : ktlint
-
-- ktlint 1.8.0, via le plugin Gradle `org.jlleitschuh.gradle.ktlint` 14.2.0, appliqué à tous les modules et aux build scripts `.kts`.
-- Style `ktlint_official`, configuré dans `.editorconfig`.
-- Première étape de la CI : un écart de style fait échouer le build avant les tests.

@@ -24,6 +24,7 @@ env:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -64,6 +65,7 @@ jobs:
   integration-test:
     needs: build-and-test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -135,6 +137,7 @@ jobs:
     needs: integration-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Download tested image
@@ -185,6 +188,7 @@ jobs:
     needs: push-to-scw-registery
     runs-on: ubuntu-latest
     environment: production
+    timeout-minutes: 10
 
     steps:
       - name: Set up Scaleway CLI
@@ -210,8 +214,17 @@ jobs:
             fi
           done
 
-      # The update sends each environment map whole: this step owns the full env of the
+      # The update sends each environment map whole:   this step owns the full env of the
       # production container, and a variable added in the Scaleway console is erased here.
+      # Nécessaire pour pouvoir revenir en arrière si le smoke test échoue :
+      # c'est la seule trace de "ce qui tournait avant ce déploiement".
+      - name: Capture currently deployed image
+        id: current
+        run: |
+          PREVIOUS_IMAGE=$(scw container container get ${{ secrets.SCW_CONTAINER_ID }} \
+            region=${{ env.SCW_REGION }} -o json | jq -r .registry_image)
+          echo "image=$PREVIOUS_IMAGE" >> "$GITHUB_OUTPUT"
+
       - name: Deploy serverless container
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -226,22 +239,33 @@ jobs:
             secret-environment-variables.DATABASE_USERNAME="$DATABASE_USERNAME" \
             secret-environment-variables.DATABASE_PASSWORD="$DATABASE_PASSWORD" \
             region=${{ env.SCW_REGION }}
-          scw container container deploy ${{ secrets.SCW_CONTAINER_ID }} \
-            region=${{ env.SCW_REGION }}
 
       - name: Smoke test production
         run: |
-          DOMAIN=$(scw container container get ${{ secrets.SCW_CONTAINER_ID }} \
-            region=${{ env.SCW_REGION }} -o json | jq -r .domain_name)
+          ENDPOINT=$(scw container container get ${{ secrets.SCW_CONTAINER_ID }} \
+            region=${{ env.SCW_REGION }} -o json | jq -r .public_endpoint)
           curl --fail --silent --show-error \
             --retry 12 --retry-delay 10 --retry-all-errors \
-            "https://${DOMAIN}${HEALTH_PATH}"
-          echo "Deployed: https://${DOMAIN}${HEALTH_PATH}" >> "$GITHUB_STEP_SUMMARY"
+            "${ENDPOINT}${HEALTH_PATH}"
+          echo "Deployed: ${ENDPOINT}${HEALTH_PATH}" >> "$GITHUB_STEP_SUMMARY"
+
+      # Si le déploiement ou le smoke test échoue, on revient immédiatement à
+      # l'image qui tournait avant ce run plutôt que de laisser une version
+      # cassée en prod jusqu'à une intervention manuelle.
+      - name: Rollback to previous image on failure
+        if: failure() && steps.current.outcome == 'success'
+        run: |
+          echo "::warning::Deploy failed, rolling back to ${{ steps.current.outputs.image }}"
+          scw container container update ${{ secrets.SCW_CONTAINER_ID }} \
+            image=${{ steps.current.outputs.image }} \
+            region=${{ env.SCW_REGION }}
+          echo "### :rotating_light: Déploiement échoué — rollback vers \`${{ steps.current.outputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
 
   push-to-scw-pr-preview:
     needs: integration-test
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Download tested image
@@ -271,6 +295,9 @@ jobs:
     needs: push-to-scw-pr-preview
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Set up Scaleway CLI
@@ -319,3 +346,14 @@ jobs:
             --retry 12 --retry-delay 10 --retry-all-errors \
             "${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"
           echo "Preview deployed: ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}" >> "$GITHUB_STEP_SUMMARY"
+
+      # --edit-last + --create-if-none : un seul commentaire mis à jour à
+      # chaque push, plutôt qu'un empilement d'un commentaire par déploiement.
+      - name: Comment preview URL on PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --edit-last --create-if-none \
+            --body "🚀 Health check : ${{ steps.deploy.outputs.public_endpoint }}${{ env.HEALTH_PATH }}"

@@ -16,6 +16,7 @@ env:
 jobs:
   cleanup-pr-preview:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
 
     steps:
       - name: Set up Scaleway CLI
