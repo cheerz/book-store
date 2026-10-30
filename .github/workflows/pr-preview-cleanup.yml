@@ -44,3 +44,18 @@ jobs:
           else
             echo "Aucun container de preview pour $CONTAINER_NAME, rien à nettoyer."
           fi
+
+      # Toujours tenté, même si le container n'existait plus : le schéma peut avoir
+      # survécu à un nettoyage précédent incomplet.
+      - name: Drop preview schema
+        if: always()
+        env:
+          SCHEMA: pr_${{ github.event.pull_request.number }}
+          PGHOST: ${{ secrets.PREVIEW_DATABASE_HOST }}
+          PGPORT: ${{ secrets.PREVIEW_DATABASE_PORT }}
+          PGDATABASE: ${{ secrets.PREVIEW_DATABASE_NAME }}
+          PGUSER: ${{ secrets.PREVIEW_DATABASE_USERNAME }}
+          PGPASSWORD: ${{ secrets.PREVIEW_DATABASE_PASSWORD }}
+        run: |
+          psql "sslmode=require" \
+            -c "DROP SCHEMA IF EXISTS \"$SCHEMA\" CASCADE;"

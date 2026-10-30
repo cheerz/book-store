@@ -48,7 +48,7 @@ front ──▶ bff/            un contrôleur par page, orchestre les domaines
 
 - Schéma créé par Hibernate (`ddl-auto: update`) : ajoute tables et colonnes, ne supprime ni ne renomme jamais.
 - `data.sql` est joué à chaque démarrage et n'insère que ce qui manque (formats, livres de départ si le catalogue est vide).
-- HSQLDB en local et dans les tests unitaires, Postgres 17 dans compose et les TI, Postgres managé en prod. Pas de H2 : licence hors MIT/Apache/BSD.
+- HSQLDB en local et dans les tests unitaires, Postgres 17 dans compose et les TI, Postgres managé en prod **et en preview de PR**. Pas de H2 : licence hors MIT/Apache/BSD.
 
 ### Brancher la production sur Postgres
 
@@ -72,6 +72,33 @@ Le profil n'a aucune valeur par défaut : une variable absente fait échouer le 
 
 Limite assumée : le schéma de production reste géré par `ddl-auto: update`. Sur une base qui dure, un outil de migration (Flyway) devient nécessaire dès qu'une colonne doit être renommée ou supprimée.
 
+### Base des previews de PR
+
+Les previews partagent l'instance Postgres de la prod, mais pointent sur une **base dédiée**
+(`book_store_preview`, distincte de la base de prod) avec un **schéma Postgres par PR**
+(`pr_<numéro>`) : une preview ne lit et n'écrit jamais dans les données d'une autre PR, et
+jamais dans celles de la prod.
+
+| Variable du container | Type Scaleway | Source |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | variable | `postgres`, en dur dans `ci.yml` |
+| `DATABASE_URL` | secrète | construite dans `ci.yml` à partir de `PREVIEW_DATABASE_HOST/PORT/NAME` + `?currentSchema=pr_<numéro>` |
+| `DATABASE_USERNAME` | secrète | secret GitHub `PREVIEW_DATABASE_USERNAME` |
+| `DATABASE_PASSWORD` | secrète | secret GitHub `PREVIEW_DATABASE_PASSWORD` |
+
+- Le job `deploy-pr-preview` crée le schéma (`CREATE SCHEMA IF NOT EXISTS`) avant de déployer
+  le container, à chaque push sur la PR : les données d'une preview survivent donc à ses
+  redéploiements successifs, contrairement au comportement précédent (HSQLDB locale au
+  container, perdue à chaque redéploiement).
+- Le job `pr-preview-cleanup.yml` supprime le schéma (`DROP SCHEMA ... CASCADE`) à la
+  fermeture de la PR, en plus du container.
+- Le rôle `PREVIEW_DATABASE_USERNAME` n'a de droits que sur la base `book_store_preview` :
+  il ne peut pas se connecter à la base de production, même en cas de faille côté CI.
+- Prérequis d'infra (hors CI, à faire une fois par un admin DB) : créer la base
+  `book_store_preview` et le rôle associé sur l'instance Postgres existante, puis déclarer
+  les 5 secrets GitHub `PREVIEW_DATABASE_HOST`, `PREVIEW_DATABASE_PORT`,
+  `PREVIEW_DATABASE_NAME`, `PREVIEW_DATABASE_USERNAME`, `PREVIEW_DATABASE_PASSWORD`.
+
 ## Déploiement
 
 Le pipeline (`.github/workflows/ci.yml`) démarre toujours par les mêmes étapes : tests
@@ -83,11 +110,11 @@ contexte :
   sur le container de production. Un smoke test sur `/api/health` valide le
   déploiement ; en cas d'échec, le container revient automatiquement à l'image
   précédente (rollback).
-- **Pull request** → l'image est poussée sous un tag dédié (`pr-<numéro>`) et déployée
-  sur un container de preview propre à la PR, dont l'URL est commentée automatiquement
-  sur la PR.
-- **Fermeture de la pull request** → le container de preview associé est supprimé
-  (`pr-preview-cleanup.yml`).
+- **Pull request** → l'image est poussée sous un tag dédié (`pr-<numéro>`), un schéma
+  Postgres `pr_<numéro>` est provisionné sur la base preview, puis le container est
+  déployé avec ce schéma, dont l'URL est commentée automatiquement sur la PR.
+- **Fermeture de la pull request** → le container de preview et son schéma Postgres sont
+  supprimés (`pr-preview-cleanup.yml`).
 
 ```mermaid
 flowchart TD
@@ -103,8 +130,10 @@ flowchart TD
     H -- "Échec" --> J["Rollback vers l'image précédente"]
 
     E -- "Pull request" --> K["Push image taguée pr-numéro"]
-    K --> L["Déploiement container preview"]
+    K --> K2["Provisionnement schéma Postgres pr_numéro"]
+    K2 --> L["Déploiement container preview"]
     L --> M["Commentaire URL preview sur la PR"]
 
     N["Fermeture de la PR"] --> O["Suppression container preview"]
+    O --> P["Suppression schéma Postgres pr_numéro"]
 ```
