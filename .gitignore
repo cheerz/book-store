@@ -1,27 +1,17 @@
-# Sorties de build non ancrées : chaque module a les siennes
-# (book-store/build/, book-store-ti/build/).
-# Les chemins ancrés (/out/, /bin/) le restent pour ne pas attraper
-# un package de source portant le même nom.
-
-### Gradle ###
 .gradle/
 build/
 !gradle/wrapper/gradle-wrapper.jar
 
-### Kotlin ###
 .kotlin/
 
-### IntelliJ IDEA ###
 /.idea/
 /out/
 *.iml
 *.iws
 *.ipr
 
-### VS Code ###
 /.vscode/
 
-### Eclipse / STS ###
 /bin/
 /.apt_generated/
 /.settings/
@@ -31,18 +21,17 @@ build/
 .project
 .springBeans
 
-### OS ###
 .DS_Store
 Thumbs.db
 
-### Secrets & local config ###
 .env
 .env.*
 *.local.yaml
 *.local.yml
 
-### Logs ###
 *.log
 
-### Spring Initializr ###
+/data/
+/book-store/data/
+
 /HELP.md

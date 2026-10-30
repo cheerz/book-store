@@ -1,9 +1,8 @@
-# Runtime-only : le jar est construit et testé par le module book-store.
-# Build local : ./gradlew :book-store:bootJar && docker build -f docker/Dockerfile .
 FROM eclipse-temurin:25-jre
 
 RUN useradd --system --no-create-home app
 WORKDIR /app
+RUN mkdir data && chown app data
 
 COPY book-store/build/libs/app.jar app.jar
 

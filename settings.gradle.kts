@@ -1,5 +1,4 @@
-rootProject.name = "demo-deploy"
+rootProject.name = "book-store"
 
-// L'équivalent du <modules> du pom parent.
 include("book-store")
 include("book-store-ti")

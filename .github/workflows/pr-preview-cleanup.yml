@@ -29,8 +29,6 @@ jobs:
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
 
-      # Idempotent : si la PR a été fermée avant son premier déploiement de
-      # preview, le container n'existe simplement pas encore.
       - name: Delete preview container
         env:
           CONTAINER_NAME: book-store-pr-${{ github.event.pull_request.number }}
@@ -46,3 +44,18 @@ jobs:
           else
             echo "Aucun container de preview pour $CONTAINER_NAME, rien à nettoyer."
           fi
+
+      # Toujours tenté, même si le container n'existait plus : le schéma peut avoir
+      # survécu à un nettoyage précédent incomplet.
+      - name: Drop preview schema
+        if: always()
+        env:
+          SCHEMA: pr_${{ github.event.pull_request.number }}
+          PGHOST: ${{ secrets.PREVIEW_DATABASE_HOST }}
+          PGPORT: ${{ secrets.PREVIEW_DATABASE_PORT }}
+          PGDATABASE: ${{ secrets.PREVIEW_DATABASE_NAME }}
+          PGUSER: ${{ secrets.PREVIEW_DATABASE_USERNAME }}
+          PGPASSWORD: ${{ secrets.PREVIEW_DATABASE_PASSWORD }}
+        run: |
+          psql "sslmode=require" \
+            -c "DROP SCHEMA IF EXISTS \"$SCHEMA\" CASCADE;"

@@ -8,8 +8,6 @@ on:
     branches:
       - master
 
-# Une file d'attente par branche : les runs d'une PR s'annulent entre eux,
-# ceux de master s'enchaînent pour ne jamais couper un déploiement.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -41,7 +39,9 @@ jobs:
       - name: Set up Gradle (cache + wrapper validation)
         uses: gradle/actions/setup-gradle@v4
 
-      # Trois couches, de la moins chère à la plus chère.
+      - name: Lint (ktlint)
+        run: ./gradlew ktlintCheck
+
       - name: Unit tests
         run: ./gradlew :book-store:test
 
@@ -62,8 +62,6 @@ jobs:
           path: book-store/build/libs/app.jar
           retention-days: 1
 
-  # Sur chaque PR et chaque push : l'image candidate est testée en boîte noire
-  # juste après les TU, sans secret ni registry.
   integration-test:
     needs: build-and-test
     runs-on: ubuntu-latest
@@ -123,8 +121,6 @@ jobs:
         if: always()
         run: docker compose down -v
 
-      # On transmet l'image testée, pas un rebuild : ce qui part en prod (ou en
-      # preview de PR) est exactement ce que les TI ont validé.
       - name: Export tested image
         if: (github.event_name == 'push' && github.ref == 'refs/heads/master') || github.event_name == 'pull_request'
         run: docker save book-store:candidate -o "$RUNNER_TEMP/book-store.tar"
@@ -205,6 +201,21 @@ jobs:
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
 
+      - name: Check database secrets
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
+        run: |
+          for name in DATABASE_URL DATABASE_USERNAME DATABASE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret GitHub $name absent : le container de production ne démarrerait pas."
+              exit 1
+            fi
+          done
+
+      # The update sends each environment map whole:   this step owns the full env of the
+      # production container, and a variable added in the Scaleway console is erased here.
       # Nécessaire pour pouvoir revenir en arrière si le smoke test échoue :
       # c'est la seule trace de "ce qui tournait avant ce déploiement".
       - name: Capture currently deployed image
@@ -215,9 +226,18 @@ jobs:
           echo "image=$PREVIOUS_IMAGE" >> "$GITHUB_OUTPUT"
 
       - name: Deploy serverless container
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_USERNAME: ${{ secrets.DATABASE_USERNAME }}
+          DATABASE_PASSWORD: ${{ secrets.DATABASE_PASSWORD }}
         run: |
           scw container container update ${{ secrets.SCW_CONTAINER_ID }} \
             image=${{ env.IMAGE }}:sha-${{ github.sha }} \
+            environment-variables.JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75" \
+            environment-variables.SPRING_PROFILES_ACTIVE=postgres \
+            secret-environment-variables.DATABASE_URL="$DATABASE_URL" \
+            secret-environment-variables.DATABASE_USERNAME="$DATABASE_USERNAME" \
+            secret-environment-variables.DATABASE_PASSWORD="$DATABASE_PASSWORD" \
             region=${{ env.SCW_REGION }}
 
       - name: Smoke test production
@@ -241,8 +261,6 @@ jobs:
             region=${{ env.SCW_REGION }}
           echo "### :rotating_light: Déploiement échoué — rollback vers \`${{ steps.current.outputs.image }}\`" >> "$GITHUB_STEP_SUMMARY"
 
-  # Sur chaque push vers une branche de PR : l'image testée part vers un tag
-  # dédié à la PR, pour alimenter le déploiement de preview.
   push-to-scw-pr-preview:
     needs: integration-test
     if: github.event_name == 'pull_request'
@@ -273,8 +291,6 @@ jobs:
           docker tag book-store:candidate "${{ env.IMAGE }}:${TAG}"
           docker push "${{ env.IMAGE }}:${TAG}"
 
-  # Un container par PR dans le namespace de preview (book-store-pr-preview) :
-  # créé au premier push, mis à jour et redéployé à chaque push suivant.
   deploy-pr-preview:
     needs: push-to-scw-pr-preview
     if: github.event_name == 'pull_request'
@@ -294,11 +310,46 @@ jobs:
           default-project-id: ${{ secrets.SCW_DEFAULT_PROJECT_ID }}
           default-organization-id: ${{ secrets.SCW_DEFAULT_ORGANIZATION_ID }}
 
+      - name: Check preview database secrets
+        env:
+          PREVIEW_DATABASE_HOST: ${{ secrets.PREVIEW_DATABASE_HOST }}
+          PREVIEW_DATABASE_PORT: ${{ secrets.PREVIEW_DATABASE_PORT }}
+          PREVIEW_DATABASE_NAME: ${{ secrets.PREVIEW_DATABASE_NAME }}
+          PREVIEW_DATABASE_USERNAME: ${{ secrets.PREVIEW_DATABASE_USERNAME }}
+          PREVIEW_DATABASE_PASSWORD: ${{ secrets.PREVIEW_DATABASE_PASSWORD }}
+        run: |
+          for name in PREVIEW_DATABASE_HOST PREVIEW_DATABASE_PORT PREVIEW_DATABASE_NAME PREVIEW_DATABASE_USERNAME PREVIEW_DATABASE_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Secret GitHub $name absent : la preview ne démarrerait pas."
+              exit 1
+            fi
+          done
+
+      # Un schéma par PR sur la base preview partagée : isole les previews entre elles
+      # sans jamais toucher à la base de production (base Postgres distincte).
+      - name: Provision preview schema
+        env:
+          SCHEMA: pr_${{ github.event.pull_request.number }}
+          PGHOST: ${{ secrets.PREVIEW_DATABASE_HOST }}
+          PGPORT: ${{ secrets.PREVIEW_DATABASE_PORT }}
+          PGDATABASE: ${{ secrets.PREVIEW_DATABASE_NAME }}
+          PGUSER: ${{ secrets.PREVIEW_DATABASE_USERNAME }}
+          PGPASSWORD: ${{ secrets.PREVIEW_DATABASE_PASSWORD }}
+        run: |
+          psql "sslmode=require" \
+            -c "CREATE SCHEMA IF NOT EXISTS \"$SCHEMA\" AUTHORIZATION \"$PGUSER\";"
+
       - name: Create or update preview container
         id: deploy
         env:
           TAG: pr-${{ github.event.pull_request.number }}
           CONTAINER_NAME: book-store-pr-${{ github.event.pull_request.number }}
+          SCHEMA: pr_${{ github.event.pull_request.number }}
+          PREVIEW_DATABASE_HOST: ${{ secrets.PREVIEW_DATABASE_HOST }}
+          PREVIEW_DATABASE_PORT: ${{ secrets.PREVIEW_DATABASE_PORT }}
+          PREVIEW_DATABASE_NAME: ${{ secrets.PREVIEW_DATABASE_NAME }}
+          PREVIEW_DATABASE_USERNAME: ${{ secrets.PREVIEW_DATABASE_USERNAME }}
+          PREVIEW_DATABASE_PASSWORD: ${{ secrets.PREVIEW_DATABASE_PASSWORD }}
         run: |
           NAMESPACE_ID=$(scw container namespace list name="${{ env.PR_PREVIEW_NAMESPACE }}" \
             region=${{ env.SCW_REGION }} -o json | jq -r '.[0].id')
@@ -306,6 +357,10 @@ jobs:
           CONTAINER_ID=$(scw container container list namespace-id="$NAMESPACE_ID" \
             name="$CONTAINER_NAME" region=${{ env.SCW_REGION }} -o json | jq -r '.[0].id // empty')
 
+          DATABASE_URL="jdbc:postgresql://${PREVIEW_DATABASE_HOST}:${PREVIEW_DATABASE_PORT}/${PREVIEW_DATABASE_NAME}?currentSchema=${SCHEMA}&sslmode=require"
+
+          # scw remplace l'environnement du container en entier à chaque appel : le profil et
+          # les identifiants DB doivent être resoumis ici à chaque déploiement, pas qu'à la création.
           if [ -z "$CONTAINER_ID" ]; then
             CONTAINER_ID=$(scw container container create \
               namespace-id="$NAMESPACE_ID" \
@@ -314,14 +369,22 @@ jobs:
               port=8080 \
               privacy=public \
               environment-variables.JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75" \
+              environment-variables.SPRING_PROFILES_ACTIVE=postgres \
+              secret-environment-variables.DATABASE_URL="$DATABASE_URL" \
+              secret-environment-variables.DATABASE_USERNAME="$PREVIEW_DATABASE_USERNAME" \
+              secret-environment-variables.DATABASE_PASSWORD="$PREVIEW_DATABASE_PASSWORD" \
               region=${{ env.SCW_REGION }} -o json | jq -r '.id')
           else
             scw container container update "$CONTAINER_ID" \
               image="${{ env.IMAGE }}:${TAG}" \
+              environment-variables.JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75" \
+              environment-variables.SPRING_PROFILES_ACTIVE=postgres \
+              secret-environment-variables.DATABASE_URL="$DATABASE_URL" \
+              secret-environment-variables.DATABASE_USERNAME="$PREVIEW_DATABASE_USERNAME" \
+              secret-environment-variables.DATABASE_PASSWORD="$PREVIEW_DATABASE_PASSWORD" \
               region=${{ env.SCW_REGION }}
           fi
 
-          
           PUBLIC_ENDPOINT=$(scw container container get "$CONTAINER_ID" region=${{ env.SCW_REGION }} -o json | jq -r .public_endpoint)
           echo "public_endpoint=$PUBLIC_ENDPOINT" >> "$GITHUB_OUTPUT"
 
