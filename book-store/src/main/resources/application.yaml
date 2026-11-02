@@ -1,17 +1,30 @@
 spring:
   application:
-    name: demo-deploy
+    name: book-store
+  datasource:
+    url: "jdbc:hsqldb:file:./data/book-store;shutdown=true;hsqldb.write_delay=false"
+    username: sa
+  jpa:
+    open-in-view: false
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: update
+  sql:
+    init:
+      mode: always
 
 server:
   port: 8080
   servlet:
     context-path: "/api"
 
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
+
 management:
   endpoints:
     web:
-      # Endpoints served at the context root instead of /actuator,
-      # so the health check is /api/health.
       base-path: "/"
       exposure:
         include: health
