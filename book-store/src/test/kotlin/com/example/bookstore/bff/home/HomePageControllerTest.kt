@@ -9,6 +9,8 @@ import kotlin.test.assertEquals
 class HomePageControllerTest {
     private val books =
         object : BookManager {
+            override fun getBook(id: Long) = getBooks().first { it.id == id }
+
             override fun getBooks() =
                 listOf(
                     Book("Bilbo", BookKind.FANTASY, "E_BOOK", 1_000),

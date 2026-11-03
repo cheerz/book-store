@@ -1,9 +1,11 @@
 package com.example.bookstore.bff.catalog
 
 import com.example.bookstore.bff.InvalidBookKindException
+import com.example.bookstore.bff.stock.BookStockClient
 import com.example.bookstore.book.domain.Book
 import com.example.bookstore.book.domain.BookKind
 import com.example.bookstore.book.domain.BookManager
+import com.example.bookstore.book.domain.BookNotFoundException
 import com.example.bookstore.format.domain.Format
 import com.example.bookstore.format.domain.FormatManager
 import com.example.bookstore.format.domain.Price
@@ -20,6 +22,8 @@ class CatalogPageControllerTest {
                     Book("Dune", BookKind.SF, "HARDCOVER", 1_200, id = 1),
                     Book("Shining", BookKind.THRILLER, "E_BOOK", 900, id = 2),
                 )
+
+            override fun getBook(id: Long) = stored.find { it.id == id } ?: throw BookNotFoundException(id)
 
             override fun getBooks() = stored.toList()
 
@@ -39,14 +43,23 @@ class CatalogPageControllerTest {
                 getFormats().find { it.label == label } ?: throw UnknownFormatException(label, emptyList())
         }
 
-    private val controller = CatalogPageController(books, formats)
+    private val stocks =
+        object : BookStockClient {
+            val quantities = mutableMapOf(1L to 2)
+
+            override fun quantitiesOf(bookIds: List<Long>) = bookIds.associateWith { quantities[it] ?: 0 }
+
+            override fun addItem(bookId: Long) = (quantities.getOrDefault(bookId, 0) + 1).also { quantities[bookId] = it }
+        }
+
+    private val controller = CatalogPageController(books, formats, stocks)
 
     @Test
-    fun `shows each book with its price, its format price and their total`() {
+    fun `shows each book with its price, its format price, their total and its stock`() {
         assertEquals(
             listOf(
-                CatalogPageItem(1, "Dune", "sf", "hardcover", 1_200, 1_000, 2_200),
-                CatalogPageItem(2, "Shining", "thriller", "e-book", 900, 500, 1_400),
+                CatalogPageItem(1, "Dune", "sf", "hardcover", 1_200, 1_000, 2_200, stock = 2),
+                CatalogPageItem(2, "Shining", "thriller", "e-book", 900, 500, 1_400, stock = 0),
             ),
             controller.page().books,
         )
@@ -64,7 +77,21 @@ class CatalogPageControllerTest {
     fun `adds a book and returns the refreshed page`() {
         val page = controller.addBook(AddBookRequestDto("Bilbo", " Fantasy ", "pocket", 1_250))
 
-        assertEquals(CatalogPageItem(3, "Bilbo", "fantasy", "pocket", 1_250, 750, 2_000), page.books.last())
+        assertEquals(CatalogPageItem(3, "Bilbo", "fantasy", "pocket", 1_250, 750, 2_000, stock = 0), page.books.last())
+    }
+
+    @Test
+    fun `adds one item to the stock of a book and returns the refreshed page`() {
+        val page = controller.addItem(2)
+
+        assertEquals(1, page.books.first { it.id == 2L }.stock)
+    }
+
+    @Test
+    fun `refuses to stock a book outside the catalog`() {
+        assertFailsWith<BookNotFoundException> { controller.addItem(99) }
+
+        assertEquals(mapOf(1L to 2), stocks.quantities)
     }
 
     @Test

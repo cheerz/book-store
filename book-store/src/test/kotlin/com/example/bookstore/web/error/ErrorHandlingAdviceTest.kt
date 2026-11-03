@@ -4,9 +4,13 @@ import com.example.bookstore.bff.InvalidBookKindException
 import com.example.bookstore.bff.catalog.AddBookRequestDto
 import com.example.bookstore.bff.catalog.CatalogPageController
 import com.example.bookstore.bff.catalog.MissingFormatException
+import com.example.bookstore.bff.stock.StockUnavailableException
+import com.example.bookstore.book.domain.BookNotFoundException
 import com.example.bookstore.book.domain.InvalidBookPriceException
 import com.example.bookstore.book.domain.InvalidBookTitleException
 import com.example.bookstore.format.domain.UnknownFormatException
+import com.example.bookstore.purchase.domain.OutOfStockException
+import com.example.bookstore.purchase.domain.PurchaseNotRecordedException
 import com.example.bookstore.web.observability.RequestIdFilter
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.extension.ExtendWith
@@ -165,6 +169,40 @@ class ErrorHandlingAdviceTest {
         errorFor(MissingFormatException("LEATHER"))
 
         assertContains(output.out, "MissingFormatException: No format configured for code: LEATHER")
+    }
+
+    @Test
+    fun `wraps a purchase beyond the stock in BBE-16`() {
+        val (status, error) = errorFor(OutOfStockException(bookId = 1, requested = 3, available = 2))
+
+        assertEquals(422, status)
+        assertEquals("BBE-16", error.errorCode)
+    }
+
+    @Test
+    fun `wraps an unreachable book-stock in BBE-17 without leaking its cause`() {
+        val (status, error) = errorFor(StockUnavailableException(RuntimeException("Connection refused: localhost/127.0.0.1:8081")))
+
+        assertEquals(503, status)
+        assertEquals("BBE-17", error.errorCode)
+        assertNull(error.developerMessage)
+    }
+
+    @Test
+    fun `wraps a book outside the catalog in BBE-18`() {
+        val (status, error) = errorFor(BookNotFoundException(99))
+
+        assertEquals(404, status)
+        assertEquals("BBE-18", error.errorCode)
+    }
+
+    @Test
+    fun `wraps an unreachable broker in BBE-19 without leaking its cause`() {
+        val (status, error) = errorFor(PurchaseNotRecordedException(RuntimeException("Connection refused: rabbitmq:5672")))
+
+        assertEquals(503, status)
+        assertEquals("BBE-19", error.errorCode)
+        assertNull(error.developerMessage)
     }
 
     @Test

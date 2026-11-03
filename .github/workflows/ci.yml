@@ -43,23 +43,32 @@ jobs:
         run: ./gradlew ktlintCheck
 
       - name: Unit tests
-        run: ./gradlew :book-store:test
+        run: ./gradlew :book-store:test :book-stock:test
 
-      - name: Build jar
-        run: ./gradlew :book-store:bootJar
+      - name: Build jars
+        run: ./gradlew :book-store:bootJar :book-stock:bootJar
 
       - name: Upload test reports
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: test-reports
-          path: book-store/build/reports/tests
+          path: |
+            book-store/build/reports/tests
+            book-stock/build/reports/tests
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
           name: app-jar
           path: book-store/build/libs/app.jar
+          retention-days: 1
+
+      - name: Upload book-stock jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: book-stock-jar
+          path: book-stock/build/libs/app.jar
           retention-days: 1
 
   integration-test:
@@ -76,6 +85,12 @@ jobs:
         with:
           name: app-jar
           path: book-store/build/libs
+
+      - name: Download tested book-stock jar
+        uses: actions/download-artifact@v4
+        with:
+          name: book-stock-jar
+          path: book-stock/build/libs
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
@@ -107,6 +122,10 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      # book-stock is not deployed yet: its image only serves the black-box tests.
+      - name: Build book-stock image (local)
+        run: docker compose build book-stock
+
       - name: Start the candidate image
         run: APP_IMAGE=book-store:candidate docker compose up -d
 
@@ -115,7 +134,7 @@ jobs:
 
       - name: Container logs
         if: failure()
-        run: docker compose logs --no-color app
+        run: docker compose logs --no-color app book-stock
 
       - name: Tear down
         if: always()

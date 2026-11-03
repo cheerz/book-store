@@ -2,7 +2,7 @@ plugins {
     kotlin("jvm") version "2.3.21" apply false
     kotlin("plugin.spring") version "2.3.21" apply false
     kotlin("plugin.jpa") version "2.3.21" apply false
-    id("org.springframework.boot") version "4.1.1" apply false
+    id("org.springframework.boot") version "4.1.2" apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
     id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
 }
@@ -28,7 +28,7 @@ val compose = "./scripts/compose.sh"
 val composeUp by tasks.registering(Exec::class) {
     group = "docker"
     description = "Builds the image from the current jar and starts the stack."
-    dependsOn(":book-store:bootJar")
+    dependsOn(":book-store:bootJar", ":book-stock:bootJar")
     commandLine(compose, "up", "-d", "--build")
 }
 
@@ -42,7 +42,7 @@ val composeDown by tasks.registering(Exec::class) {
 val composeLogs by tasks.registering(Exec::class) {
     group = "docker"
     description = "Dumps the application logs (used when the tests fail)."
-    commandLine(compose, "logs", "--no-color", "app")
+    commandLine(compose, "logs", "--no-color", "app", "book-stock")
     onlyIf {
         gradle.taskGraph.hasTask(":ti") &&
             project(":book-store-ti")

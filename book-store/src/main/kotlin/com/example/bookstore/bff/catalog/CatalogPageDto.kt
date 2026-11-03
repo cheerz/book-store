@@ -18,4 +18,5 @@ data class CatalogPageItem(
     val bookPriceInCents: Long,
     val formatPriceInCents: Long,
     val totalPriceInCents: Long,
+    val stock: Int,
 )

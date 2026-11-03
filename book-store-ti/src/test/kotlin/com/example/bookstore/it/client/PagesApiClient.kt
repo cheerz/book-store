@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import feign.Feign
 import feign.Headers
+import feign.Param
 import feign.RequestLine
 import feign.jackson.JacksonDecoder
 import feign.jackson.JacksonEncoder
@@ -17,6 +18,15 @@ interface PagesApiClient {
     @RequestLine("POST /pages/catalog/books")
     @Headers("Content-Type: application/json")
     fun addBook(book: BookPayload): CatalogPagePayload
+
+    @RequestLine("POST /pages/catalog/books/{bookId}/add-item")
+    fun addStockItem(
+        @Param("bookId") bookId: Long,
+    ): CatalogPagePayload
+
+    @RequestLine("POST /pages/purchase")
+    @Headers("Content-Type: application/json")
+    fun purchase(request: PurchasePayload)
 
     @RequestLine("GET /pages/home")
     fun homePage(): HomePagePayload
@@ -42,12 +52,18 @@ data class CatalogPagePayload(
 )
 
 data class CatalogItemPayload(
+    val id: Long,
     val title: String,
     val kind: String,
     val format: String,
     val bookPriceInCents: Long,
     val formatPriceInCents: Long,
     val totalPriceInCents: Long,
+    val stock: Int,
+)
+
+data class PurchasePayload(
+    val bookIds: List<Long>,
 )
 
 data class HomePagePayload(

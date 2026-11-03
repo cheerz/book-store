@@ -2,9 +2,13 @@ package com.example.bookstore.web.error
 
 import com.example.bookstore.bff.InvalidBookKindException
 import com.example.bookstore.bff.catalog.MissingFormatException
+import com.example.bookstore.bff.stock.StockUnavailableException
+import com.example.bookstore.book.domain.BookNotFoundException
 import com.example.bookstore.book.domain.InvalidBookPriceException
 import com.example.bookstore.book.domain.InvalidBookTitleException
 import com.example.bookstore.format.domain.UnknownFormatException
+import com.example.bookstore.purchase.domain.OutOfStockException
+import com.example.bookstore.purchase.domain.PurchaseNotRecordedException
 import com.example.bookstore.web.observability.RequestIdFilter
 import org.slf4j.LoggerFactory
 import org.slf4j.MDC
@@ -45,6 +49,10 @@ class ErrorHandlingAdvice {
             is InvalidBookTitleException -> BbeError.INVALID_BOOK_TITLE
             is InvalidBookPriceException -> BbeError.INVALID_PRICE_DEFINITION
             is MissingFormatException -> BbeError.MISSING_FORMAT
+            is OutOfStockException -> BbeError.OUT_OF_STOCK
+            is StockUnavailableException -> BbeError.STOCK_UNAVAILABLE
+            is BookNotFoundException -> BbeError.BOOK_NOT_FOUND
+            is PurchaseNotRecordedException -> BbeError.PURCHASE_NOT_RECORDED
             is HttpMessageNotReadableException -> BbeError.BAD_REQUEST
             is ErrorResponse -> bbeForStatus(exception.statusCode)
             else -> BbeError.SERVER_ERROR

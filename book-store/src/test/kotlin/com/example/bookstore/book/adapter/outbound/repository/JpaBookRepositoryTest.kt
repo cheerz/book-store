@@ -29,4 +29,11 @@ class JpaBookRepositoryTest
 
             assertEquals(created, repository.findAll().last())
         }
+
+        @Test
+        fun `finds a created book by its id`() {
+            val created = repository.create(Book("Dune", BookKind.SF, "HARDCOVER", 1_200))
+
+            assertEquals(created, repository.findById(checkNotNull(created.id)))
+        }
     }

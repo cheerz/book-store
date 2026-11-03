@@ -8,5 +8,7 @@ class BookManagerImpl(
 ) : BookManager {
     override fun getBooks(): List<Book> = bookRepository.findAll()
 
+    override fun getBook(id: Long): Book = bookRepository.findById(id) ?: throw BookNotFoundException(id)
+
     override fun createBook(book: Book): Book = bookRepository.create(book)
 }

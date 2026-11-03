@@ -15,6 +15,55 @@ services:
     volumes:
       - book-store-db:/var/lib/postgresql/data
 
+  # Not published, like db: a book-stock started on the host would otherwise share the queue
+  # and consume part of the events the stack produces.
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Broker for bootRun only: `./scripts/compose.sh --profile local up -d rabbitmq-local`.
+  # Behind a profile, so the `down -v` of `./gradlew ti` leaves it running.
+  rabbitmq-local:
+    image: rabbitmq:4.1-management
+    profiles: ["local"]
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  book-stock:
+    image: ${BOOK_STOCK_IMAGE:-book-stock:candidate}
+    build:
+      context: .
+      dockerfile: docker/book-stock.Dockerfile
+    # No curl in the image: bash sends the HTTP request to the actuator health itself.
+    healthcheck:
+      test:
+        - CMD
+        - bash
+        - -c
+        - "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /api/health HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q UP <&3"
+      interval: 2s
+      timeout: 2s
+      retries: 30
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      JAVA_TOOL_OPTIONS: "-XX:MaxRAMPercentage=75"
+      # Same database as book-store, as in production: each service owns its own tables.
+      SPRING_PROFILES_ACTIVE: postgres
+      DATABASE_URL: jdbc:postgresql://db:5432/bookstore
+      DATABASE_USERNAME: bookstore
+      DATABASE_PASSWORD: bookstore
+      RABBITMQ_HOST: rabbitmq
+    mem_limit: 512m
+
   app:
     image: ${APP_IMAGE:-book-store:candidate}
     build:
@@ -22,6 +71,10 @@ services:
       dockerfile: docker/Dockerfile
     depends_on:
       db:
+        condition: service_healthy
+      book-stock:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     ports:
       - "8080:8080"
@@ -31,6 +84,8 @@ services:
       DATABASE_URL: jdbc:postgresql://db:5432/bookstore
       DATABASE_USERNAME: bookstore
       DATABASE_PASSWORD: bookstore
+      BOOK_STOCK_URL: http://book-stock:8081/api
+      RABBITMQ_HOST: rabbitmq
     mem_limit: 512m
 
 volumes:

@@ -12,6 +12,13 @@ spring:
   sql:
     init:
       mode: always
+  rabbitmq:
+    host: "${RABBITMQ_HOST:localhost}"
+    # see [DEC:publisher-confirms]
+    publisher-confirm-type: correlated
+
+book-stock:
+  base-url: "${BOOK_STOCK_URL:http://localhost:8081/api}"
 
 server:
   port: 8080
@@ -32,3 +39,8 @@ management:
     health:
       probes:
         enabled: true
+  # Production and PR previews have no broker yet: the rabbit indicator would turn /health DOWN
+  # and fail the post-deploy smoke test. A broker outage shows up as BBE-19 on a purchase instead.
+  health:
+    rabbit:
+      enabled: false

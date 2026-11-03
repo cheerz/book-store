@@ -1,0 +1,9 @@
+# No defaults on purpose: a missing variable stops the startup instead of
+# silently falling back to the embedded HSQLDB of application.yaml.
+# Spring leaves an unset placeholder as is: a missing DATABASE_URL shows up as
+# "'url' must start with "jdbc"", not as the name of the variable.
+spring:
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}

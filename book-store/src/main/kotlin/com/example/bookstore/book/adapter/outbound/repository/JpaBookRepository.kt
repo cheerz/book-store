@@ -3,6 +3,7 @@ package com.example.bookstore.book.adapter.outbound.repository
 import com.example.bookstore.book.domain.Book
 import com.example.bookstore.book.domain.BookRepository
 import org.springframework.data.domain.Sort
+import org.springframework.data.repository.findByIdOrNull
 import org.springframework.stereotype.Repository
 
 @Repository
@@ -10,6 +11,8 @@ class JpaBookRepository(
     private val books: SpringDataBookRepository,
 ) : BookRepository {
     override fun findAll(): List<Book> = books.findAll(Sort.by(BookEntity::id.name)).map { it.toBook() }
+
+    override fun findById(id: Long): Book? = books.findByIdOrNull(id)?.toBook()
 
     override fun create(book: Book): Book = books.save(BookEntity.from(book)).toBook()
 }

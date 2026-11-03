@@ -70,6 +70,9 @@
     .book:hover .book-cover { transform: translateY(-4px) rotate(-1deg); }
     .book.is-new .book-cover { animation: pop .6s ease-out; }
     .book-prices { margin: 0; color: var(--muted); font-size: .75rem; text-align: center; }
+    .add-stock { padding: .35rem .7rem; border: 1px solid var(--accent); border-radius: 999px; background: var(--surface); color: var(--accent); font: inherit; font-size: .75rem; font-weight: 700; cursor: pointer; }
+    .add-stock:hover { background: var(--accent-soft); }
+    .add-stock:disabled { opacity: .45; cursor: progress; }
     .book-cover {
       position: relative; display: flex; flex-direction: column; gap: .4rem;
       width: calc(100% * var(--format-ratio, 1)); aspect-ratio: 2 / 3; padding: .8rem .8rem .8rem 1rem;
@@ -107,7 +110,33 @@
     .primary { padding: .8rem; border: none; border-radius: 10px; background: var(--accent); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
     .primary:hover { filter: brightness(1.08); }
 
+    .purchase-shelf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem; align-items: stretch; }
+    .purchase-shelf:empty::before { content: "Le catalogue est vide."; color: var(--muted); }
+    .purchase-book { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: .6rem; padding: 1rem .75rem .85rem; border: 2px solid var(--border); border-radius: 16px; background: var(--surface); cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+    .purchase-book:hover { transform: translateY(-2px); }
+    .purchase-book:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+    .purchase-book:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .purchase-book input { position: absolute; opacity: 0; pointer-events: none; }
+    .purchase-book .book-cover { width: calc(110px * var(--format-ratio, 1)); }
+    .purchase-book .book-cover .price-tag { display: none; }
+    .tags { display: flex; flex-wrap: wrap; justify-content: center; gap: .35rem; }
+    .stock-tag { display: inline-block; padding: .15rem .55rem; border-radius: 999px; background: #dcfce7; color: #166534; font-size: .8rem; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .stock-tag.is-out { background: var(--error-bg); color: var(--error-text); }
+    .checkout { position: sticky; bottom: 1rem; display: flex; align-items: center; gap: 1rem; margin-top: 1.5rem; padding: 1rem 1.25rem; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); box-shadow: 0 10px 30px -15px rgba(0, 0, 0, .45); }
+    .checkout-summary { flex: 1; color: var(--muted); }
+    .checkout-total { font-size: 1.4rem; font-variant-numeric: tabular-nums; }
+    .primary:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+    .checkout .primary { padding: .8rem 1.5rem; }
+    .loader { position: fixed; inset: 0; z-index: 10; display: grid; place-content: center; justify-items: center; gap: 1rem; background: rgba(0, 0, 0, .45); color: #fff; font-weight: 600; }
+    .loader[hidden] { display: none; }
+    .spinner { width: 48px; height: 48px; border: 5px solid rgba(255, 255, 255, .3); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
     @media (max-width: 760px) {
+      .topbar { flex-wrap: wrap; }
+      .tabs button { padding: .45rem .7rem; }
+      .checkout { flex-wrap: wrap; }
+      .checkout .primary { width: 100%; }
       .catalog-layout { grid-template-columns: 1fr; }
       .panel { position: static; order: -1; }
       .hero-count { font-size: 3rem; }
@@ -119,8 +148,9 @@
     <header class="topbar">
       <div class="brand"><span class="logo"></span>Book Store</div>
       <nav class="tabs">
-        <button type="button" data-page="home">Accueil</button>
+        <button type="button" data-page="home">Statistiques</button>
         <button type="button" data-page="catalog">Catalogue</button>
+        <button type="button" data-page="purchase">Achat</button>
       </nav>
     </header>
 
@@ -171,10 +201,27 @@
         </form>
       </div>
     </section>
+
+    <section id="purchase" hidden>
+      <h2>Choisis tes livres</h2>
+      <div id="purchase-books" class="purchase-shelf"></div>
+      <div class="checkout">
+        <span id="purchase-summary" class="checkout-summary"></span>
+        <strong id="purchase-total" class="checkout-total"></strong>
+        <button type="button" id="buy" class="primary">Acheter</button>
+      </div>
+    </section>
+  </div>
+
+  <div id="loader" class="loader" hidden>
+    <span class="spinner"></span>
+    <p>Achat validé, mise à jour du stock…</p>
   </div>
 
   <script>
-    const ENDPOINTS = { home: "pages/home", catalog: "pages/catalog", addBook: "pages/catalog/books" };
+    const ENDPOINTS = { home: "pages/home", catalog: "pages/catalog", addBook: "pages/catalog/books", purchase: "pages/purchase" };
+    // Leaves book-stock the time to consume BookPurchased before the stock is read again.
+    const STOCK_REFRESH_DELAY_MS = 1000;
     const euros = new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" });
 
     function formatCents(cents) {
@@ -194,8 +241,9 @@
 
     async function requestPage(url, options) {
       const response = await fetch(url, options);
-      const body = await response.json();
-      if (!response.ok) throw body.error;
+      const text = await response.text();
+      const body = text ? JSON.parse(text) : null;
+      if (!response.ok) throw body?.error;
       return body;
     }
 
@@ -204,7 +252,9 @@
       const lines = error?.userMessage
         ? [error.userMessage, error.requestId && `Référence : ${error.requestId}`]
         : ["Le service ne répond pas, réessaie dans quelques instants."];
-      document.getElementById("error").textContent = lines.filter(Boolean).join("\n");
+      const banner = document.getElementById("error");
+      banner.textContent = lines.filter(Boolean).join("\n");
+      banner.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
 
     function clearError() {
@@ -232,11 +282,22 @@
       return cover;
     }
 
+    function stockTag(stock) {
+      const tag = element("span", "stock-tag", stockLabel(stock));
+      tag.classList.toggle("is-out", stock <= 0);
+      return tag;
+    }
+
     function bookCard(book) {
+      const addStock = element("button", "add-stock", "Ajouter 1 livre en stock");
+      addStock.type = "button";
+      addStock.dataset.bookId = book.id;
       const card = element("article", "book");
       card.append(
         bookCover({ title: book.title, kind: book.kind, format: book.format, priceLabel: formatCents(book.totalPriceInCents) }),
         element("p", "book-prices", `${formatCents(book.bookPriceInCents)} + ${formatCents(book.formatPriceInCents)} format`),
+        stockTag(book.stock),
+        addStock,
       );
       return card;
     }
@@ -284,7 +345,67 @@
       document.querySelector("#books .book:last-child")?.classList.add("is-new");
     }
 
-    const RENDERERS = { home: renderHome, catalog: renderCatalog };
+    function stockLabel(stock) {
+      return stock > 0 ? `Stock : ${stock}` : "Rupture";
+    }
+
+    function purchaseCard(book) {
+      const checkbox = element("input");
+      Object.assign(checkbox, { type: "checkbox", name: "bookIds", value: book.id });
+      checkbox.dataset.priceInCents = book.totalPriceInCents;
+      const tags = element("div", "tags");
+      tags.append(stockTag(book.stock), element("span", "price-tag", formatCents(book.totalPriceInCents)));
+      const card = element("label", "purchase-book");
+      card.append(checkbox, bookCover({ title: book.title, kind: book.kind, format: book.format, priceLabel: "" }), tags);
+      return card;
+    }
+
+    function selectedBooks() {
+      return [...document.querySelectorAll("#purchase-books input:checked")];
+    }
+
+    function updateCheckout() {
+      const selected = selectedBooks();
+      const totalInCents = selected.reduce((total, input) => total + Number(input.dataset.priceInCents), 0);
+      document.getElementById("purchase-summary").textContent = selected.length === 0
+        ? "Aucun livre sélectionné"
+        : `Total (${selected.length} livre${selected.length > 1 ? "s" : ""})`;
+      document.getElementById("purchase-total").textContent = formatCents(totalInCents);
+      document.getElementById("buy").disabled = selected.length === 0;
+    }
+
+    function renderPurchase(page) {
+      document.getElementById("purchase-books").replaceChildren(...page.books.map(purchaseCard));
+      updateCheckout();
+    }
+
+    function wait(milliseconds) {
+      return new Promise((resolve) => setTimeout(resolve, milliseconds));
+    }
+
+    async function buy() {
+      clearError();
+      const button = document.getElementById("buy");
+      button.disabled = true;
+      try {
+        await requestPage(ENDPOINTS.purchase, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookIds: selectedBooks().map((input) => Number(input.value)) }),
+        });
+      } catch (error) {
+        showError(error);
+        updateCheckout();
+        return;
+      }
+      const loader = document.getElementById("loader");
+      loader.hidden = false;
+      await wait(STOCK_REFRESH_DELAY_MS);
+      loader.hidden = true;
+      await showPage("purchase");
+    }
+
+    const RENDERERS = { home: renderHome, catalog: renderCatalog, purchase: renderPurchase };
 
     function pageFromHash() {
       const name = location.hash.slice(1);
@@ -330,11 +451,27 @@
       }
     }
 
+    async function addStockItem(event) {
+      const button = event.target.closest(".add-stock");
+      if (!button) return;
+      clearError();
+      button.disabled = true;
+      try {
+        renderCatalog(await requestPage(`${ENDPOINTS.addBook}/${button.dataset.bookId}/add-item`, { method: "POST" }));
+      } catch (error) {
+        showError(error);
+        button.disabled = false;
+      }
+    }
+
     document.querySelectorAll(".tabs button").forEach((button) => {
       button.addEventListener("click", () => { location.hash = button.dataset.page; });
     });
+    document.getElementById("books").addEventListener("click", addStockItem);
     document.getElementById("add-book").addEventListener("submit", addBook);
     document.getElementById("add-book").addEventListener("input", updatePreview);
+    document.getElementById("purchase-books").addEventListener("change", updateCheckout);
+    document.getElementById("buy").addEventListener("click", buy);
     window.addEventListener("hashchange", () => showPage(pageFromHash()));
     showPage(pageFromHash());
   </script>

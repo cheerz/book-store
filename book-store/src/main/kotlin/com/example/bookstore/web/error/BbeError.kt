@@ -16,6 +16,10 @@ enum class BbeError(
     UNSUPPORTED_MEDIA_TYPE("BBE-13", "Unsupported media type.", 415, "La demande est incomplète ou mal formée."),
     MISSING_FORMAT("BBE-14", "Missing format.", 500, "Une erreur est survenue, réessaie dans quelques instants."),
     INVALID_BOOK_TITLE("BBE-15", "Invalid book title.", 422, "Le titre doit contenir entre 1 et 255 caractères."),
+    OUT_OF_STOCK("BBE-16", "Out of stock.", 422, "Il ne reste pas assez d'exemplaires de ce livre."),
+    STOCK_UNAVAILABLE("BBE-17", "Stock unavailable.", 503, "Le stock est momentanément indisponible, réessaie dans quelques instants."),
+    BOOK_NOT_FOUND("BBE-18", "Book not found.", 404, "Ce livre n'existe pas."),
+    PURCHASE_NOT_RECORDED("BBE-19", "Purchase not recorded.", 503, "L'achat n'a pas pu être enregistré, réessaie dans quelques instants."),
     ;
 
     val isServerError: Boolean get() = httpStatus >= 500

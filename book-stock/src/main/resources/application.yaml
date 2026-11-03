@@ -1,8 +1,44 @@
 spring:
   application:
     name: book-stock
+  datasource:
+    url: "jdbc:hsqldb:file:./data/book-stock;shutdown=true;hsqldb.write_delay=false"
+    username: sa
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: update
+  rabbitmq:
+    host: "${RABBITMQ_HOST:localhost}"
+    listener:
+      simple:
+        # After the retries, a failing message goes to book-stock.book-purchased.dlq instead of looping.
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
 
 server:
   port: 8081
   servlet:
     context-path: "/api"
+
+logging:
+  pattern:
+    level: "%5p [%X{requestId:-}]"
+
+management:
+  endpoints:
+    web:
+      base-path: "/"
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  # Production has no broker yet: the rabbit indicator would turn /health DOWN although the REST API
+  # answers. Meanwhile the listener reconnects on its own and book-store refuses purchases with BBE-19.
+  health:
+    rabbit:
+      enabled: false

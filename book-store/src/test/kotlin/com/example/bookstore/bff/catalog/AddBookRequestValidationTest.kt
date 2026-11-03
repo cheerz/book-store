@@ -1,7 +1,9 @@
 package com.example.bookstore.bff.catalog
 
+import com.example.bookstore.bff.stock.BookStockClient
 import com.example.bookstore.book.domain.Book
 import com.example.bookstore.book.domain.BookManager
+import com.example.bookstore.book.domain.BookNotFoundException
 import com.example.bookstore.format.domain.Format
 import com.example.bookstore.format.domain.FormatManager
 import com.example.bookstore.format.domain.Price
@@ -29,6 +31,8 @@ class AddBookRequestValidationTest
             @Bean
             fun bookManager(): BookManager =
                 object : BookManager {
+                    override fun getBook(id: Long): Book = throw BookNotFoundException(id)
+
                     override fun getBooks(): List<Book> = emptyList()
 
                     override fun createBook(book: Book): Book = book
@@ -40,6 +44,14 @@ class AddBookRequestValidationTest
                     override fun getFormats(): List<Format> = emptyList()
 
                     override fun formatOf(label: String): Format = Format("E_BOOK", label, Price(0))
+                }
+
+            @Bean
+            fun bookStockClient(): BookStockClient =
+                object : BookStockClient {
+                    override fun quantitiesOf(bookIds: List<Long>): Map<Long, Int> = emptyMap()
+
+                    override fun addItem(bookId: Long): Int = 1
                 }
         }
 
