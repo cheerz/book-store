@@ -8,4 +8,8 @@ data class BookPurchased(
     val bookId: Long,
     val quantity: Int,
     val occurredAt: Instant,
-)
+) {
+    companion object {
+        fun of(line: PurchaseLine): BookPurchased = BookPurchased(UUID.randomUUID(), line.bookId, line.quantity, Instant.now())
+    }
+}

@@ -36,15 +36,16 @@ class PurchasePageController(
         return PurchasePageDto(books.map { toItem(it, formatsByCode.formatOf(it), stocks) })
     }
 
-    // 202: the purchase is accepted, book-stock applies it to the stock asynchronously.
+    // 202: the order is recorded, book-stock applies it to the stock asynchronously.
     @PostMapping
     @ResponseStatus(HttpStatus.ACCEPTED)
     fun purchase(
         @Valid @RequestBody request: PurchaseRequestDto,
-    ) {
+    ): PurchaseResponseDto {
         val bookIds = checkNotNull(request.bookIds).distinct()
         bookIds.forEach(bookManager::getBook)
-        purchaseManager.purchase(bookIds.map { PurchaseLine(it, quantity = 1) }, bookStockClient.quantitiesOf(bookIds))
+        val lines = bookIds.map { PurchaseLine(it, quantity = 1) }
+        return PurchaseResponseDto(purchaseManager.purchase(lines, bookStockClient.quantitiesOf(bookIds)).id)
     }
 
     private fun toItem(

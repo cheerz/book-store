@@ -27,20 +27,22 @@ class ErrorHandlingAdvice {
         val bbe = bbeFor(exception)
         val status = httpStatusFor(exception, bbe)
         log(bbe, exception)
-
-        return ResponseEntity.status(status).body(
-            ErrorEnvelopeDto(
-                ErrorResponseDto(
-                    statusCode = status,
-                    errorCode = bbe.code,
-                    userMessage = bbe.userMessage,
-                    developerSummary = bbe.summary,
-                    developerMessage = developerMessageFor(exception, bbe),
-                    requestId = MDC.get(RequestIdFilter.MDC_KEY),
-                ),
-            ),
-        )
+        return ResponseEntity.status(status).body(ErrorEnvelopeDto(errorResponseFor(exception, bbe, status)))
     }
+
+    private fun errorResponseFor(
+        exception: Exception,
+        bbe: BbeError,
+        status: Int,
+    ): ErrorResponseDto =
+        ErrorResponseDto(
+            statusCode = status,
+            errorCode = bbe.code,
+            userMessage = bbe.userMessage,
+            developerSummary = bbe.summary,
+            developerMessage = developerMessageFor(exception, bbe),
+            requestId = MDC.get(RequestIdFilter.MDC_KEY),
+        )
 
     private fun bbeFor(exception: Exception): BbeError =
         when (exception) {

@@ -1,27 +1,39 @@
 package com.example.bookstore.purchase.domain
 
 import org.springframework.stereotype.Service
-import java.time.Instant
-import java.util.UUID
 
 @Service
 class PurchaseManagerImpl(
+    private val purchaseOrders: PurchaseOrderRepository,
     private val purchaseEventPublisher: PurchaseEventPublisher,
 ) : PurchaseManager {
-    // The check narrows overselling but cannot close it: two purchases can read the same quantity
-    // before book-stock applies either. book-stock then lets the stock go negative.
+    // No outbox: the order insert and the publications are separate writes, so a crash or a broker
+    // failure between them leaves a recorded order that book-stock never hears about.
     override fun purchase(
         lines: List<PurchaseLine>,
         availableQuantities: Map<Long, Int>,
-    ): List<BookPurchased> {
-        val shortLine = lines.firstOrNull { it.quantity > availableQuantities.getOrDefault(it.bookId, 0) }
-        if (shortLine != null) {
-            throw OutOfStockException(shortLine.bookId, shortLine.quantity, availableQuantities.getOrDefault(shortLine.bookId, 0))
-        }
+    ): PurchaseOrder {
+        checkQuantityOfEachBook(lines, availableQuantities)
+        val order = recordOrder(lines)
+        sendBookPurchasedEvents(lines)
+        return order
+    }
 
-        return lines.map { line ->
-            BookPurchased(UUID.randomUUID(), line.bookId, line.quantity, Instant.now())
-                .also(purchaseEventPublisher::publish)
+    // The check narrows overselling but cannot close it: two purchases can read the same quantity
+    // before book-stock applies either. book-stock then lets the stock go negative.
+    private fun checkQuantityOfEachBook(
+        lines: List<PurchaseLine>,
+        availableQuantities: Map<Long, Int>,
+    ) {
+        lines.forEach { line ->
+            val available = availableQuantities.getOrDefault(line.bookId, 0)
+            if (line.quantity > available) throw OutOfStockException(line.bookId, line.quantity, available)
         }
+    }
+
+    private fun recordOrder(lines: List<PurchaseLine>): PurchaseOrder = PurchaseOrder.place(lines).also(purchaseOrders::save)
+
+    private fun sendBookPurchasedEvents(lines: List<PurchaseLine>) {
+        lines.forEach { purchaseEventPublisher.publish(BookPurchased.of(it)) }
     }
 }

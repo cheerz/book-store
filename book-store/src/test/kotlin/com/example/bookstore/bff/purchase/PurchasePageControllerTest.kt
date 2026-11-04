@@ -9,11 +9,9 @@ import com.example.bookstore.format.domain.Format
 import com.example.bookstore.format.domain.FormatManager
 import com.example.bookstore.format.domain.Price
 import com.example.bookstore.format.domain.UnknownFormatException
-import com.example.bookstore.purchase.domain.BookPurchased
 import com.example.bookstore.purchase.domain.PurchaseLine
 import com.example.bookstore.purchase.domain.PurchaseManager
-import java.time.Instant
-import java.util.UUID
+import com.example.bookstore.purchase.domain.PurchaseOrder
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -49,13 +47,14 @@ class PurchasePageControllerTest {
     private val purchases =
         object : PurchaseManager {
             val purchased = mutableListOf<PurchaseLine>()
+            var lastOrder: PurchaseOrder? = null
 
             override fun purchase(
                 lines: List<PurchaseLine>,
                 availableQuantities: Map<Long, Int>,
-            ): List<BookPurchased> {
+            ): PurchaseOrder {
                 purchased.addAll(lines)
-                return lines.map { BookPurchased(UUID.randomUUID(), it.bookId, it.quantity, Instant.now()) }
+                return PurchaseOrder.place(lines).also { lastOrder = it }
             }
         }
 
@@ -80,10 +79,11 @@ class PurchasePageControllerTest {
     }
 
     @Test
-    fun `buys one item of each selected book`() {
-        controller.purchase(PurchaseRequestDto(bookIds = listOf(1, 2)))
+    fun `orders one item of each selected book and gives back the order id`() {
+        val response = controller.purchase(PurchaseRequestDto(bookIds = listOf(1, 2)))
 
         assertEquals(listOf(PurchaseLine(1, 1), PurchaseLine(2, 1)), purchases.purchased)
+        assertEquals(purchases.lastOrder?.id, response.orderId)
     }
 
     @Test

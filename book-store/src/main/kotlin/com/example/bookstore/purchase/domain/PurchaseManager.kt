@@ -4,5 +4,5 @@ interface PurchaseManager {
     fun purchase(
         lines: List<PurchaseLine>,
         availableQuantities: Map<Long, Int>,
-    ): List<BookPurchased>
+    ): PurchaseOrder
 }

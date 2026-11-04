@@ -22,20 +22,34 @@ class RabbitPurchaseEventPublisher(
     override fun publish(event: BookPurchased) {
         val correlation = CorrelationData(event.eventId.toString())
         try {
-            rabbitTemplate.convertAndSend(
-                MessagingTopology.BOOK_STORE_EVENTS_EXCHANGE,
-                MessagingTopology.BOOK_PURCHASED_ROUTING_KEY,
-                BookPurchasedMessage.from(event),
-                ::withRequestId,
-                correlation,
-            )
-            val confirm = correlation.future.get(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            if (!confirm.isAck) throw AmqpException("RabbitMQ refused purchase ${ event.eventId }: ${ confirm.reason }")
+            send(event, correlation)
+            awaitAck(event, correlation)
         } catch (exception: AmqpException) {
             throw PurchaseNotRecordedException(exception)
         } catch (exception: TimeoutException) {
             throw PurchaseNotRecordedException(exception)
         }
+    }
+
+    private fun send(
+        event: BookPurchased,
+        correlation: CorrelationData,
+    ) {
+        rabbitTemplate.convertAndSend(
+            MessagingTopology.BOOK_STORE_EVENTS_EXCHANGE,
+            MessagingTopology.BOOK_PURCHASED_ROUTING_KEY,
+            BookPurchasedMessage.from(event),
+            ::withRequestId,
+            correlation,
+        )
+    }
+
+    private fun awaitAck(
+        event: BookPurchased,
+        correlation: CorrelationData,
+    ) {
+        val confirm = correlation.future.get(CONFIRM_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        if (!confirm.isAck) throw AmqpException("RabbitMQ refused purchase ${ event.eventId }: ${ confirm.reason }")
     }
 
     private fun withRequestId(message: Message): Message =
